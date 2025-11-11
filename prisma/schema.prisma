@@ -1,0 +1,340 @@
+// Prisma Schema for Laniakea SSO
+// MySQL Database Configuration - Based on sso.sql
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CORE MASTER DATA
+// ============================================================================
+
+/// Core licenses master data
+model CoreLicense {
+  key          String    @id @db.VarChar(255)
+  name         String    @db.VarChar(255)
+  description  String?   @db.VarChar(255)
+  defaultValue String?   @map("default_value") @db.VarChar(255)
+  createdAt    DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  tenantLicenses TenantLicense[]
+  
+  @@map("core_licenses")
+}
+
+/// Core services master data
+model CoreService {
+  key         String    @id @db.VarChar(255)
+  name        String    @db.VarChar(255)
+  description String?   @db.Text
+  icon        String?   @db.VarChar(255)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  @@map("core_services")
+}
+
+/// Core status tenants master data
+model CoreStatusTenant {
+  key         String    @id @db.VarChar(255)
+  name        String    @db.VarChar(255)
+  description String?   @db.VarChar(255)
+  createdAt   DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  @@map("core_status_tenants")
+}
+
+/// Default values for system initialization
+model DefaultValue {
+  id           String    @id @db.Char(36)
+  tableName    String    @map("table_name") @db.VarChar(255)
+  insertValues Json      @map("insert_values") @db.Json
+  createdAt    DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  @@map("default_values")
+}
+
+// ============================================================================
+// USER MANAGEMENT
+// ============================================================================
+
+/// User accounts
+model User {
+  id                   String    @id @db.Char(36)
+  name                 String    @db.VarChar(255)
+  username             String    @unique @db.VarChar(30)
+  email                String    @unique @db.VarChar(50)
+  phone                String?   @db.VarChar(15)
+  emailVerifiedAt      DateTime? @map("email_verified_at") @db.Timestamp(0)
+  password             String    @db.VarChar(255)
+  profilePhotoPath     String?   @map("profile_photo_path") @db.VarChar(2048)
+  failedLoginCounter   Int       @default(0) @map("failed_login_counter")
+  lastLoginAt          DateTime? @map("last_login_at") @db.Timestamp(0)
+  lastLoginIp          String?   @map("last_login_ip") @db.VarChar(45)
+  lastTenantId         String?   @map("last_tenant_id") @db.Char(36)
+  lastServiceKey       String?   @map("last_service_key") @db.Char(36)
+  isLocked             Boolean   @default(false) @map("is_locked")
+  temporaryLockUntil   DateTime? @map("temporary_lock_until") @db.Timestamp(0)
+  forceLogoutAt        DateTime? @map("force_logout_at") @db.Timestamp(0)
+  lockedAt             DateTime? @map("locked_at") @db.Timestamp(0)
+  rememberToken        String?   @map("remember_token") @db.VarChar(100)
+  createdAt            DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt            DateTime? @map("updated_at") @db.Timestamp(0)
+  deletedAt            DateTime? @map("deleted_at") @db.Timestamp(0)
+  
+  // Relations
+  sessions             Session[]
+  refreshTokens        RefreshToken[]
+  userConfigs          UserConfig[]
+  failedLoginAttempts  FailedLoginAttempt[]
+  tenants              TenantHasUser[]
+  
+  @@index([email])
+  @@index([username])
+  @@index([lastTenantId])
+  @@map("users")
+}
+
+/// User configurations
+model UserConfig {
+  id          String    @id @db.Char(36)
+  userId      String    @map("user_id") @db.Char(36)
+  configKey   String    @map("config_key") @db.VarChar(128)
+  configValue String?   @map("config_value") @db.Text
+  createdAt   DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([configKey])
+  @@map("user_configs")
+}
+
+// ============================================================================
+// AUTHENTICATION & SESSION MANAGEMENT
+// ============================================================================
+
+/// Active user sessions
+model Session {
+  id           String    @id @db.Char(36)
+  userId       String    @map("user_id") @db.Char(36)
+  ipAddress    String?   @map("ip_address") @db.VarChar(45)
+  userAgent    String?   @map("user_agent") @db.VarChar(255)
+  deviceName   String?   @map("device_name") @db.VarChar(100)
+  latitude     String?   @db.VarChar(50)
+  longitude    String?   @db.VarChar(50)
+  payload      String?   @db.LongText
+  lastActivity DateTime  @default(now()) @map("last_activity") @db.Timestamp(0)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamp(0)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+  
+  @@index([userId])
+  @@index([revokedAt])
+  @@index([lastActivity])
+  @@map("sessions")
+}
+
+/// Refresh tokens for token rotation
+model RefreshToken {
+  id        String    @id @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  sessionId String    @map("session_id") @db.Char(36)
+  tokenHash String    @unique @map("token_hash") @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at") @db.Timestamp(0)
+  revoked   Boolean   @default(false)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamp(0)
+  createdAt DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([sessionId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+/// Password reset tokens
+model PasswordResetToken {
+  email     String   @id @db.VarChar(255)
+  token     String   @db.VarChar(255)
+  expiresAt DateTime @map("expires_at") @db.Timestamp(0)
+  createdAt DateTime? @map("created_at") @db.Timestamp(0)
+  
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+/// Failed login attempts tracking
+model FailedLoginAttempt {
+  id          String   @id @db.Char(36)
+  userId      String?  @map("user_id") @db.Char(36)
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  userAgent   String?  @map("user_agent") @db.VarChar(255)
+  payload     String   @db.LongText
+  attemptedAt DateTime @default(now()) @map("attempted_at") @db.Timestamp(0)
+  latitude    String?  @db.VarChar(255)
+  longitude   String?  @db.VarChar(255)
+  
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([ipAddress])
+  @@index([attemptedAt])
+  @@map("failed_login_attempts")
+}
+
+// ============================================================================
+// TENANT MANAGEMENT
+// ============================================================================
+
+/// Tenants (organizations)
+model Tenant {
+  id                           String    @id @db.Char(36)
+  name                         String    @db.VarChar(100)
+  code                         String    @unique @db.VarChar(20)
+  logoPath                     String?   @map("logo_path") @db.VarChar(2048)
+  infoWebsite                  String?   @map("info_website") @db.VarChar(255)
+  infoEmail                    String?   @map("info_email") @db.VarChar(255)
+  infoPhone                    String?   @map("info_phone") @db.VarChar(255)
+  infoTaxNumber                String?   @map("info_tax_number") @db.VarChar(255)
+  address                      String?   @db.VarChar(255)
+  country                      String?   @db.VarChar(100)
+  province                     String?   @db.VarChar(100)
+  city                         String?   @db.VarChar(100)
+  postalCode                   String?   @map("postal_code") @db.VarChar(20)
+  isActive                     Boolean   @default(true) @map("is_active")
+  status                       String    @default("trial") @db.VarChar(255)
+  joinedAt                     DateTime  @default(now()) @map("joined_at") @db.DateTime(0)
+  expiredAt                    DateTime? @map("expired_at") @db.DateTime(0)
+  revokedAt                    DateTime? @map("revoked_at") @db.DateTime(0)
+  maximalFailedLoginAttempts   Int       @default(5) @map("maximal_failed_login_attempts")
+  createdAt                    DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt                    DateTime? @map("updated_at") @db.Timestamp(0)
+  deletedAt                    DateTime? @map("deleted_at") @db.Timestamp(0)
+  
+  // Relations
+  users       TenantHasUser[]
+  configs     TenantConfig[]
+  licenses    TenantLicense[]
+  connections TenantConnection[]
+  
+  @@index([code])
+  @@index([status])
+  @@map("tenants")
+}
+
+/// Tenant user relationship
+model TenantHasUser {
+  tenantId String  @map("tenant_id") @db.Char(36)
+  userId   String  @map("user_id") @db.Char(36)
+  isActive Boolean @default(true) @map("is_active")
+  isOwner  Boolean @default(false) @map("is_owner")
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@id([tenantId, userId])
+  @@index([tenantId])
+  @@index([userId])
+  @@map("tenant_has_user")
+}
+
+/// Tenant configurations
+model TenantConfig {
+  id          String    @id @db.Char(36)
+  tenantId    String    @map("tenant_id") @db.Char(36)
+  configKey   String    @map("config_key") @db.VarChar(255)
+  configValue String    @map("config_value") @db.Text
+  configType  String    @map("config_type") @db.VarChar(50)
+  createdAt   DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt   DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, configKey])
+  @@index([tenantId])
+  @@map("tenant_configs")
+}
+
+/// Tenant licenses
+model TenantLicense {
+  id         String    @id @db.Char(36)
+  tenantId   String    @map("tenant_id") @db.Char(36)
+  licenseKey String    @map("license_key") @db.VarChar(255)
+  value      String?   @db.VarChar(255)
+  createdAt  DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt  DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  coreLicense CoreLicense  @relation(fields: [licenseKey], references: [key])
+  
+  @@unique([tenantId, licenseKey])
+  @@index([tenantId])
+  @@index([licenseKey])
+  @@map("tenant_licenses")
+}
+
+/// Tenant database connections
+model TenantConnection {
+  id             String    @id @db.Char(36)
+  tenantId       String    @map("tenant_id") @db.Char(36)
+  connectionName String    @map("connection_name") @db.VarChar(255)
+  databasePrefix String?   @map("database_prefix") @db.VarChar(255)
+  createdAt      DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId])
+  @@map("tenant_connections")
+}
+
+// ============================================================================
+// AUDIT LOG
+// ============================================================================
+
+/// Comprehensive audit trail for all system activities
+model AuditLog {
+  id             String    @id @db.Char(36)
+  userType       String    @map("user_type") @db.VarChar(255)
+  userId         String    @map("user_id") @db.VarChar(255)
+  event          String    @db.VarChar(255)
+  auditableTable String    @map("auditable_table") @db.VarChar(255)
+  auditableId    String    @map("auditable_id") @db.Char(36)
+  oldValues      String?   @map("old_values") @db.Text
+  newValues      String?   @map("new_values") @db.Text
+  url            String?   @db.Text
+  payload        Json?     @db.Json
+  ipAddress      String?   @map("ip_address") @db.VarChar(45)
+  userAgent      String?   @map("user_agent") @db.VarChar(255)
+  tags           String?   @db.VarChar(255)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
+  
+  @@index([userId])
+  @@index([auditableTable])
+  @@index([auditableId])
+  @@index([event])
+  @@index([userType])
+  @@index([createdAt])
+  @@index([auditableTable, createdAt])
+  @@index([userId, event, createdAt])
+  @@map("audit_logs")
+}

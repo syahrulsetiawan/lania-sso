@@ -1,0 +1,12 @@
+# Prisma
+/migrations/
+*.db
+*.db-journal
+
+# Prisma Studio
+.prisma-studio/
+
+# Environment variables (should be in root .gitignore too)
+.env
+.env.local
+.env.*.local
