@@ -87,7 +87,10 @@ export class PrismaService
 
     const models = Reflect.ownKeys(this).filter(
       (key) =>
-        key !== '_baseDmmf' && typeof key === 'string' && !key.startsWith('_'),
+        key !== '_baseDmmf' &&
+        typeof key === 'string' &&
+        !key.startsWith('_') &&
+        !key.startsWith('$'),
     );
 
     return Promise.all(
@@ -96,6 +99,7 @@ export class PrismaService
         if (model && typeof model === 'object' && 'deleteMany' in model) {
           return (model as any).deleteMany();
         }
+        return Promise.resolve();
       }),
     );
   }
@@ -103,30 +107,34 @@ export class PrismaService
   /**
    * Enable soft delete for models
    * Add deletedAt field to your models to use this
+   *
+   * Note: Currently handled manually in queries with `where: { deletedAt: null }`
+   * Uncomment if you want to use middleware approach
    */
-  enableSoftDelete() {
-    this.$use(async (params, next) => {
-      // Check if model has deletedAt field
-      const model = this[params.model as keyof PrismaService] as any;
-      if (!model) return next(params);
+  // enableSoftDelete() {
+  //   this.$use(async (params, next) => {
+  //     // Check if model exists
+  //     if (!params.model) return next(params);
 
-      if (params.action === 'delete') {
-        // Convert delete to update with deletedAt
-        params.action = 'update';
-        params.args['data'] = { deletedAt: new Date() };
-      }
+  //     if (params.action === 'delete') {
+  //       // Convert delete to update with deletedAt
+  //       params.action = 'update';
+  //       params.args = params.args || {};
+  //       params.args['data'] = { deletedAt: new Date() };
+  //     }
 
-      if (params.action === 'deleteMany') {
-        // Convert deleteMany to updateMany with deletedAt
-        params.action = 'updateMany';
-        if (params.args.data !== undefined) {
-          params.args.data['deletedAt'] = new Date();
-        } else {
-          params.args['data'] = { deletedAt: new Date() };
-        }
-      }
+  //     if (params.action === 'deleteMany') {
+  //       // Convert deleteMany to updateMany with deletedAt
+  //       params.action = 'updateMany';
+  //       params.args = params.args || {};
+  //       if (params.args.data !== undefined) {
+  //         params.args.data['deletedAt'] = new Date();
+  //       } else {
+  //         params.args['data'] = { deletedAt: new Date() };
+  //       }
+  //     }
 
-      return next(params);
-    });
-  }
+  //     return next(params);
+  //   });
+  // }
 }

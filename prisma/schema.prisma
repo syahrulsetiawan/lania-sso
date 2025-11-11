@@ -38,6 +38,8 @@ model CoreService {
   createdAt   DateTime? @map("created_at") @db.Timestamp(0)
   updatedAt   DateTime? @map("updated_at") @db.Timestamp(0)
   
+  tenants TenantHasService[]
+  
   @@map("core_services")
 }
 
@@ -234,6 +236,7 @@ model Tenant {
   configs     TenantConfig[]
   licenses    TenantLicense[]
   connections TenantConnection[]
+  services    TenantHasService[]
   
   @@index([code])
   @@index([status])
@@ -304,6 +307,38 @@ model TenantConnection {
   
   @@index([tenantId])
   @@map("tenant_connections")
+}
+
+/// Tenant services - Many-to-many relationship between tenants and services
+model TenantHasService {
+  tenantId   String    @map("tenant_id") @db.Char(36)
+  serviceKey String    @map("service_key") @db.VarChar(255)
+  createdAt  DateTime? @map("created_at") @db.Timestamp(0)
+  updatedAt  DateTime? @map("updated_at") @db.Timestamp(0)
+  
+  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service CoreService @relation(fields: [serviceKey], references: [key], onDelete: Cascade)
+  
+  @@id([tenantId, serviceKey])
+  @@index([tenantId])
+  @@index([serviceKey])
+  @@map("tenant_has_service")
+}
+
+// ============================================================================
+// EMAIL VERIFICATION
+// ============================================================================
+
+/// Email verification tokens for user email verification
+model EmailVerificationToken {
+  email     String   @id @db.VarChar(191)
+  token     String   @db.VarChar(255)
+  expiresAt DateTime @map("expires_at") @db.Timestamp(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+  
+  @@index([token])
+  @@index([expiresAt])
+  @@map("email_verification_tokens")
 }
 
 // ============================================================================

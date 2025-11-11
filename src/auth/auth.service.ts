@@ -25,6 +25,11 @@ import {
   LogoutResponseDto,
   LogoutAllResponseDto,
   UserMeResponseDto,
+  SendEmailVerificationDto,
+  VerifyEmailDto,
+  SwitchTenantDto,
+  SwitchTenantResponseDto,
+  ToggleUserLockedResponseDto,
 } from './dto';
 
 /**
@@ -52,8 +57,14 @@ export class AuthService {
     loginDto: LoginDto,
     request: FastifyRequest,
   ): Promise<LoginResponseDto> {
-    const { usernameOrEmail, password, deviceName, latitude, longitude } =
-      loginDto;
+    const {
+      usernameOrEmail,
+      password,
+      deviceName,
+      latitude,
+      longitude,
+      rememberMe,
+    } = loginDto;
     const ipAddress = this.getIpAddress(request);
     const userAgent = request.headers['user-agent'] || 'Unknown';
 
@@ -366,6 +377,16 @@ export class AuthService {
         });
       }
 
+      // Generate remember token if requested
+      let rememberToken: string | null = null;
+      if (rememberMe) {
+        rememberToken = crypto.randomBytes(32).toString('hex');
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: { rememberToken },
+        });
+      }
+
       // Reset failed login counter on successful login
       await this.prisma.user.update({
         where: { id: user.id },
@@ -421,6 +442,7 @@ export class AuthService {
         refreshToken,
         expiresIn: 3600, // 1 hour in seconds
         tokenType: 'Bearer',
+        rememberToken: rememberMe ? rememberToken : undefined,
         user: {
           id: user.id,
           name: user.name,
@@ -895,6 +917,28 @@ export class AuthService {
                   logoPath: true,
                   status: true,
                   isActive: true,
+                  configs: {
+                    select: {
+                      id: true,
+                      configKey: true,
+                      configValue: true,
+                      configType: true,
+                    },
+                  },
+                  // services: {
+                  //   select: {
+                  //     serviceKey: true,
+                  //     service: {
+                  //       select: {
+                  //         key: true,
+                  //         name: true,
+                  //         description: true,
+                  //         icon: true,
+                  //         isActive: true,
+                  //       },
+                  //     },
+                  //   },
+                  // },
                 },
               },
             },
@@ -912,11 +956,7 @@ export class AuthService {
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
 
-      return {
-        ...userWithoutPassword,
-        userConfigs: user.userConfigs,
-        tenants: user.tenants,
-      };
+      return userWithoutPassword as any;
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
@@ -1044,5 +1084,348 @@ export class AuthService {
       request.ip ||
       'unknown'
     );
+  }
+
+  /**
+   * Send email verification link
+   */
+  async sendEmailVerification(
+    email: string,
+    request: FastifyRequest,
+  ): Promise<{ message: string }> {
+    // Check if user exists with this email
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, emailVerifiedAt: true, name: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException({
+        message: 'Email not found',
+        reason: 'email_not_found',
+      });
+    }
+
+    if (user.emailVerifiedAt) {
+      throw new BadRequestException({
+        message: 'Email already verified',
+        reason: 'email_already_verified',
+      });
+    }
+
+    // Generate verification token
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // 1 hour expiration
+
+    // Upsert token (replace if exists)
+    await this.prisma.emailVerificationToken.upsert({
+      where: { email },
+      update: {
+        token,
+        expiresAt,
+        createdAt: new Date(),
+      },
+      create: {
+        email,
+        token,
+        expiresAt,
+      },
+    });
+
+    // Send verification email
+    await this.emailService.sendEmailVerification(user.name, email, token);
+
+    // Audit log
+    await this.auditService.logFromRequest(request, {
+      userType: 'User',
+      userId: user.id,
+      event: 'send_email_verification',
+      auditableTable: 'email_verification_tokens',
+      auditableId: email,
+      newValues: { email, expiresAt },
+      tags: 'email,verification',
+    });
+
+    return {
+      message: 'Verification email sent successfully',
+    };
+  }
+
+  /**
+   * Verify email with token
+   */
+  async verifyEmail(
+    email: string,
+    token: string,
+    request: FastifyRequest,
+  ): Promise<{ message: string }> {
+    // Find verification token
+    const verificationToken =
+      await this.prisma.emailVerificationToken.findUnique({
+        where: { email },
+      });
+
+    if (!verificationToken) {
+      throw new BadRequestException({
+        message: 'Invalid verification token',
+        reason: 'invalid_verification_token',
+      });
+    }
+
+    if (verificationToken.token !== token) {
+      throw new BadRequestException({
+        message: 'Invalid verification token',
+        reason: 'invalid_verification_token',
+      });
+    }
+
+    if (new Date() > verificationToken.expiresAt) {
+      throw new BadRequestException({
+        message: 'Verification token has expired',
+        reason: 'verification_token_expired',
+      });
+    }
+
+    // Update user email_verified_at
+    const user = await this.prisma.user.update({
+      where: { email },
+      data: { emailVerifiedAt: new Date() },
+      select: { id: true, email: true, name: true },
+    });
+
+    // Delete verification token
+    await this.prisma.emailVerificationToken.delete({
+      where: { email },
+    });
+
+    // Audit log
+    await this.auditService.logFromRequest(request, {
+      userType: 'User',
+      userId: user.id,
+      event: 'email_verified',
+      auditableTable: 'users',
+      auditableId: user.id,
+      newValues: { email: user.email, verifiedAt: new Date() },
+      tags: 'email,verification,success',
+    });
+
+    return {
+      message: 'Email verified successfully',
+    };
+  }
+
+  /**
+   * Switch user to different tenant
+   */
+  async switchTenant(
+    userId: string,
+    tenantId: string,
+    request: FastifyRequest,
+  ): Promise<{
+    message: string;
+    accessToken: string;
+    expiresIn: number;
+    tokenType: string;
+    tenant: any;
+  }> {
+    // Verify user has access to target tenant
+    const tenantHasUser = await this.prisma.tenantHasUser.findFirst({
+      where: {
+        userId,
+        tenantId,
+      },
+      select: {
+        userId: true,
+        tenantId: true,
+        isActive: true,
+        isOwner: true,
+      },
+    });
+
+    if (!tenantHasUser) {
+      throw new BadRequestException({
+        message: 'You do not have access to this tenant',
+        reason: 'tenant_access_denied',
+      });
+    }
+
+    if (!tenantHasUser.isActive) {
+      throw new BadRequestException({
+        message: 'Your access to this tenant is inactive',
+        reason: 'tenant_access_inactive',
+      });
+    }
+
+    // Get tenant details
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        logoPath: true,
+        status: true,
+        isActive: true,
+        revokedAt: true,
+      },
+    });
+
+    if (!tenant || !tenant.isActive || tenant.revokedAt) {
+      throw new BadRequestException({
+        message: 'This tenant is inactive or has been revoked',
+        reason: 'tenant_inactive_or_revoked',
+      });
+    }
+
+    // Update user's last tenant
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { lastTenantId: tenantId },
+    });
+
+    // Generate new access token with tenant context
+    const payload = {
+      sub: userId,
+      tenantId,
+    };
+
+    const accessToken = this.jwtService.sign(payload, {
+      expiresIn: this.ACCESS_TOKEN_EXPIRATION,
+    });
+
+    // Audit log
+    await this.auditService.logFromRequest(request, {
+      userType: 'User',
+      userId,
+      event: 'switch_tenant',
+      auditableTable: 'users',
+      auditableId: userId,
+      newValues: { lastTenantId: tenantId },
+      tags: 'tenant,switch',
+    });
+
+    return {
+      message: 'Successfully switched to tenant',
+      accessToken,
+      expiresIn: 3600,
+      tokenType: 'Bearer',
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        code: tenant.code,
+        logoPath: tenant.logoPath,
+        status: tenant.status,
+      },
+    };
+  }
+
+  /**
+   * Toggle user locked status (Owner only)
+   */
+  async toggleUserLocked(
+    currentUserId: string,
+    targetUserId: string,
+    request: FastifyRequest,
+  ): Promise<{
+    message: string;
+    userId: string;
+    isLocked: boolean;
+    lockedAt: Date | null;
+  }> {
+    // Get current user's tenant
+    const currentUser = await this.prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { lastTenantId: true },
+    });
+
+    if (!currentUser?.lastTenantId) {
+      throw new BadRequestException({
+        message: 'No active tenant selected',
+        reason: 'no_active_tenant',
+      });
+    }
+
+    // Check if current user is owner of the tenant
+    const currentUserTenant = await this.prisma.tenantHasUser.findFirst({
+      where: {
+        userId: currentUserId,
+        tenantId: currentUser.lastTenantId,
+      },
+      select: { isOwner: true },
+    });
+
+    if (!currentUserTenant?.isOwner) {
+      throw new UnauthorizedException({
+        message: 'Only tenant owners can lock/unlock users',
+        reason: 'owner_permission_required',
+      });
+    }
+
+    // Get target user
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, isLocked: true, lockedAt: true },
+    });
+
+    if (!targetUser) {
+      throw new BadRequestException({
+        message: 'User not found',
+        reason: 'user_not_found',
+      });
+    }
+
+    // Toggle lock status
+    const newLockStatus = !targetUser.isLocked;
+    const updatedUser = await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        isLocked: newLockStatus,
+        lockedAt: newLockStatus ? new Date() : null,
+        // Reset lockout counters when unlocking
+        ...(newLockStatus
+          ? {}
+          : {
+              failedLoginCounter: 0,
+              temporaryLockUntil: null,
+              forceLogoutAt: null,
+            }),
+      },
+      select: { id: true, isLocked: true, lockedAt: true },
+    });
+
+    // Revoke all sessions if locking (commented until Prisma generate)
+    // TODO: Uncomment after running npx prisma generate
+    // if (newLockStatus) {
+    //   await this.prisma.userSession.updateMany({
+    //     where: { userId: targetUserId },
+    //     data: { revokedAt: new Date() },
+    //   });
+    // }
+
+    // Audit log
+    await this.auditService.logFromRequest(request, {
+      userType: 'User',
+      userId: currentUserId,
+      event: newLockStatus ? 'user_locked' : 'user_unlocked',
+      auditableTable: 'users',
+      auditableId: targetUserId,
+      oldValues: {
+        isLocked: targetUser.isLocked,
+        lockedAt: targetUser.lockedAt,
+      },
+      newValues: {
+        isLocked: updatedUser.isLocked,
+        lockedAt: updatedUser.lockedAt,
+      },
+      tags: 'user,lock,admin',
+    });
+
+    return {
+      message: `User ${newLockStatus ? 'locked' : 'unlocked'} successfully`,
+      userId: updatedUser.id,
+      isLocked: updatedUser.isLocked,
+      lockedAt: updatedUser.lockedAt,
+    };
   }
 }

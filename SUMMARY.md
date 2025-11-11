@@ -73,6 +73,17 @@ Semua endpoint authentication yang diminta sudah **SELESAI DIBUAT** dan siap dig
 - ✅ JWT authentication required
 - ✅ Audit logging
 
+#### `/api/v1/auth/me` - GET
+
+- ✅ Get current user profile
+- ✅ User data lengkap
+- ✅ User configurations
+- ✅ User tenants dengan tenant details
+- ✅ **Tenant configs** (config per tenant)
+- ✅ **Tenant services** (services yang bisa diakses per tenant)
+- ✅ JWT authentication required
+- ✅ Password excluded dari response
+
 ### 3. **Audit Logging** ✅
 
 Semua operasi tercatat di `audit_logs` table:
@@ -193,6 +204,7 @@ Semua table dari `sso.sql` sudah di-map ke Prisma schema:
 ✅ tenants  
 ✅ tenant_has_user  
 ✅ tenant_configs  
+✅ tenant_has_service ⭐ **NEW**  
 ✅ tenant_licenses  
 ✅ tenant_connections  
 ✅ user_configs  

@@ -71,20 +71,58 @@ export class UserMeResponseDto {
   lastServiceKey: string | null;
 
   @ApiProperty({
+    description: 'Failed login counter',
+    example: 0,
+  })
+  failedLoginCounter: number;
+
+  @ApiProperty({
     description: 'Account locked status',
     example: false,
   })
   isLocked: boolean;
 
   @ApiProperty({
-    description: 'Account creation date',
+    description: 'Temporary lock until timestamp',
+    nullable: true,
   })
-  createdAt: Date;
+  temporaryLockUntil: Date | null;
+
+  @ApiProperty({
+    description: 'Force logout at timestamp',
+    nullable: true,
+  })
+  forceLogoutAt: Date | null;
+
+  @ApiProperty({
+    description: 'Locked at timestamp',
+    nullable: true,
+  })
+  lockedAt: Date | null;
+
+  @ApiProperty({
+    description: 'Remember token',
+    nullable: true,
+  })
+  rememberToken: string | null;
+
+  @ApiProperty({
+    description: 'Account creation date',
+    nullable: true,
+  })
+  createdAt: Date | null;
 
   @ApiProperty({
     description: 'Account last update date',
+    nullable: true,
   })
-  updatedAt: Date;
+  updatedAt: Date | null;
+
+  @ApiProperty({
+    description: 'Account deletion date',
+    nullable: true,
+  })
+  deletedAt: Date | null;
 
   @ApiProperty({
     description: 'User configurations',
@@ -119,8 +157,40 @@ export class UserMeResponseDto {
             id: { type: 'string' },
             name: { type: 'string' },
             code: { type: 'string' },
-            logoPath: { type: 'string' },
+            logoPath: { type: 'string', nullable: true },
             status: { type: 'string' },
+            isActive: { type: 'boolean' },
+            configs: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  configKey: { type: 'string' },
+                  configValue: { type: 'string' },
+                  configType: { type: 'string' },
+                },
+              },
+            },
+            services: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  serviceKey: { type: 'string' },
+                  service: {
+                    type: 'object',
+                    properties: {
+                      key: { type: 'string' },
+                      name: { type: 'string' },
+                      description: { type: 'string', nullable: true },
+                      icon: { type: 'string', nullable: true },
+                      isActive: { type: 'boolean' },
+                    },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -137,6 +207,22 @@ export class UserMeResponseDto {
       logoPath: string | null;
       status: string;
       isActive: boolean;
+      configs: Array<{
+        id: string;
+        configKey: string;
+        configValue: string;
+        configType: string;
+      }>;
+      services: Array<{
+        serviceKey: string;
+        service: {
+          key: string;
+          name: string;
+          description: string | null;
+          icon: string | null;
+          isActive: boolean;
+        };
+      }>;
     };
   }>;
 }

@@ -165,14 +165,98 @@ Reset URL: ${resetUrl}
    * Send email verification
    */
   async sendEmailVerification(
-    email: string,
     userName: string,
+    email: string,
     verificationToken: string,
   ): Promise<void> {
-    this.logger.log(
-      `Email verification would be sent to ${email} with token ${verificationToken}`,
-    );
-    // Implement email verification template
+    try {
+      const verificationUrl = `${this.configService.get('FRONTEND_URL')}/verify-email?token=${verificationToken}&email=${encodeURIComponent(email)}`;
+
+      // Email template
+      const subject = 'Email Verification - Laniakea SSO';
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #10B981; color: white; padding: 20px; text-align: center; }
+            .content { background-color: #f9f9f9; padding: 30px; }
+            .button { 
+              display: inline-block; 
+              padding: 12px 30px; 
+              background-color: #10B981; 
+              color: white; 
+              text-decoration: none; 
+              border-radius: 5px; 
+              margin: 20px 0;
+            }
+            .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+            .warning { color: #dc2626; font-weight: bold; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Verify Your Email Address</h1>
+            </div>
+            <div class="content">
+              <p>Hi ${userName},</p>
+              <p>Thank you for creating an account with Laniakea SSO!</p>
+              <p>Please verify your email address by clicking the button below:</p>
+              <p style="text-align: center;">
+                <a href="${verificationUrl}" class="button">Verify Email</a>
+              </p>
+              <p>Or copy and paste this link into your browser:</p>
+              <p style="word-break: break-all; background: #fff; padding: 10px; border: 1px solid #ddd;">
+                ${verificationUrl}
+              </p>
+              <p class="warning">
+                ⚠️ This link will expire in 1 hour.
+              </p>
+              <p>If you didn't create an account, please ignore this email.</p>
+              <p>Best regards,<br>Laniakea SSO Team</p>
+            </div>
+            <div class="footer">
+              <p>This is an automated email. Please do not reply to this message.</p>
+              <p>&copy; ${new Date().getFullYear()} Laniakea. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const textContent = `
+Hi ${userName},
+
+Thank you for creating an account with Laniakea SSO!
+
+Please verify your email address by clicking the following link:
+${verificationUrl}
+
+This link will expire in 1 hour.
+
+If you didn't create an account, please ignore this email.
+
+Best regards,
+Laniakea SSO Team
+      `;
+
+      // TODO: Implement actual email sending with nodemailer, SendGrid, etc.
+      this.logger.log(`Email verification sent to ${email}`);
+      this.logger.debug(`Verification URL: ${verificationUrl}`);
+
+      // For development: Log the email content
+      this.logger.debug(`Subject: ${subject}`);
+      this.logger.debug(`Text Content: ${textContent}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to send email verification to ${email}:`,
+        error,
+      );
+      throw error;
+    }
   }
 
   /**

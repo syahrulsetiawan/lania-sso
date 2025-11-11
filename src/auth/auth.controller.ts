@@ -7,6 +7,7 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  Param,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,6 +29,12 @@ import {
   LogoutResponseDto,
   LogoutAllResponseDto,
   UserMeResponseDto,
+  SendEmailVerificationDto,
+  VerifyEmailDto,
+  EmailVerificationResponseDto,
+  SwitchTenantDto,
+  SwitchTenantResponseDto,
+  ToggleUserLockedResponseDto,
 } from './dto';
 
 /**
@@ -206,5 +213,149 @@ export class AuthController {
   async logoutAll(@Req() request: any): Promise<LogoutAllResponseDto> {
     const userId = request.user.userId || request.user.sub;
     return this.authService.logoutAll(userId, request);
+  }
+
+  /**
+   * POST /api/v1/auth/send-email-verification
+   *
+   * Send email verification link to user's email
+   *
+   * @param dto - Email to send verification to
+   * @param request - Fastify request object
+   * @returns Success message
+   */
+  @Post('send-email-verification')
+  @ApiOperation({
+    summary: 'Send email verification link',
+    description: 'Sends a verification email with a token valid for 1 hour',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification email sent successfully',
+    type: EmailVerificationResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Email not found or already verified',
+  })
+  @HttpCode(HttpStatus.OK)
+  async sendEmailVerification(
+    @Body() dto: SendEmailVerificationDto,
+    @Req() request: FastifyRequest,
+  ): Promise<EmailVerificationResponseDto> {
+    return this.authService.sendEmailVerification(dto.email, request);
+  }
+
+  /**
+   * POST /api/v1/auth/verify-email
+   *
+   * Verify user email with token from email
+   *
+   * @param dto - Email and verification token
+   * @param request - Fastify request object
+   * @returns Success message
+   */
+  @Post('verify-email')
+  @ApiOperation({
+    summary: 'Verify email address',
+    description: 'Verifies email address using token sent via email',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Email verified successfully',
+    type: EmailVerificationResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid or expired token',
+  })
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(
+    @Body() dto: VerifyEmailDto,
+    @Req() request: FastifyRequest,
+  ): Promise<EmailVerificationResponseDto> {
+    return this.authService.verifyEmail(dto.email, dto.token, request);
+  }
+
+  /**
+   * POST /api/v1/auth/switch-tenant
+   *
+   * Switch user to different tenant
+   * Returns new access token with tenant context
+   * Requires authentication (JWT token in Authorization header)
+   *
+   * @param dto - Tenant ID to switch to
+   * @param request - Fastify request object with user info
+   * @returns New access token with tenant context
+   */
+  @Post('switch-tenant')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Switch to different tenant',
+    description:
+      'Switches user context to different tenant and returns new access token',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully switched tenant',
+    type: SwitchTenantResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Tenant access denied or inactive',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @HttpCode(HttpStatus.OK)
+  async switchTenant(
+    @Body() dto: SwitchTenantDto,
+    @Req() request: any,
+  ): Promise<SwitchTenantResponseDto> {
+    const userId = request.user.userId || request.user.sub;
+    return this.authService.switchTenant(userId, dto.tenantId, request);
+  }
+
+  /**
+   * POST /api/v1/auth/users/:id/toggle-locked
+   *
+   * Toggle user lock status (Owner only)
+   * Only tenant owners can lock/unlock users
+   * Requires authentication (JWT token in Authorization header)
+   *
+   * @param id - User ID to toggle lock status
+   * @param request - Fastify request object with current user info
+   * @returns Updated lock status
+   */
+  @Post('users/:id/toggle-locked')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Toggle user lock status (Owner only)',
+    description:
+      'Locks or unlocks a user account. Only tenant owners can perform this action.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User lock status updated successfully',
+    type: ToggleUserLockedResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - User not found or no active tenant',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Only tenant owners can lock/unlock users',
+  })
+  @HttpCode(HttpStatus.OK)
+  async toggleUserLocked(
+    @Param('id') id: string,
+    @Req() request: any,
+  ): Promise<ToggleUserLockedResponseDto> {
+    const currentUserId = request.user.userId || request.user.sub;
+    return this.authService.toggleUserLocked(currentUserId, id, request);
   }
 }

@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, MinLength, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  MinLength,
+  IsOptional,
+  IsBoolean,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class LoginDto {
@@ -46,6 +52,16 @@ export class LoginDto {
   @IsString()
   @IsOptional()
   longitude?: string;
+
+  @ApiProperty({
+    description: 'Remember this device for extended session (30 days)',
+    example: false,
+    required: false,
+    default: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  rememberMe?: boolean;
 }
 
 export class LoginResponseDto {
@@ -72,6 +88,14 @@ export class LoginResponseDto {
     example: 'Bearer',
   })
   tokenType: string;
+
+  @ApiProperty({
+    description:
+      'Remember token for persistent sessions (only if rememberMe=true)',
+    nullable: true,
+    required: false,
+  })
+  rememberToken?: string | null;
 
   @ApiProperty({
     description: 'User information',

@@ -24,7 +24,8 @@ Login user dengan username/email dan password.
   "password": "SecurePassword123!",
   "deviceName": "Chrome on Windows",
   "latitude": "-6.200000",
-  "longitude": "106.816666"
+  "longitude": "106.816666",
+  "rememberMe": true
 }
 ```
 
@@ -38,6 +39,7 @@ Login user dengan username/email dan password.
     "refreshToken": "a1b2c3d4e5f6g7h8i9j0...",
     "expiresIn": 3600,
     "tokenType": "Bearer",
+    "rememberToken": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6...",
     "user": {
       "id": "550e8400-e29b-41d4-a716-446655440000",
       "name": "John Doe",
@@ -52,6 +54,25 @@ Login user dengan username/email dan password.
   "timestamp": "2025-11-11T14:30:00.000Z"
 }
 ```
+
+**Request Fields:**
+
+- `usernameOrEmail` (required): Username or email address
+- `password` (required): User password (min 6 characters)
+- `deviceName` (optional): Device name for session tracking (default: auto-detect from user agent)
+- `latitude` (optional): GPS latitude for geolocation
+- `longitude` (optional): GPS longitude for geolocation
+- `rememberMe` (optional): Generate remember token for persistent login (default: false)
+
+**Remember Me Feature:**
+
+When `rememberMe: true`:
+
+- Generates 64-character hex token
+- Stored in `users.remember_token`
+- Returned in response as `rememberToken`
+- Frontend should store securely (httpOnly cookie recommended)
+- Use for automatic re-authentication
 
 **Error Responses:**
 
@@ -81,6 +102,7 @@ Login user dengan username/email dan password.
 
 - ✅ Access token valid for 1 hour
 - ✅ Refresh token valid for 7 days
+- ✅ Remember me token (optional, 64-char hex)
 - ✅ Progressive lockout (5min → 15min → permanent)
 - ✅ Tenant validation (active tenant required)
 - ✅ Session creation with device tracking
@@ -318,6 +340,340 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - ✅ Revoke ALL user sessions
 - ✅ Revoke ALL refresh tokens
 - ✅ Session count tracking
+
+---
+
+### 7. Send Email Verification
+
+Kirim email verifikasi ke alamat email user.
+
+**Endpoint:** `POST /api/v1/auth/send-email-verification`
+
+**Request Body:**
+
+```json
+{
+  "email": "john@example.com"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Verification email sent successfully"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Error Responses:**
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "Email not found",
+    "reason": "email_not_found"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "Email already verified",
+    "reason": "email_already_verified"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Features:**
+
+- ✅ Generates random 64-character token
+- ✅ Token expires in 1 hour
+- ✅ Replaces existing token if any (upsert)
+- ✅ Sends HTML email with verification link
+- ✅ Audit logging
+
+---
+
+### 8. Verify Email
+
+Verifikasi alamat email menggunakan token dari email.
+
+**Endpoint:** `POST /api/v1/auth/verify-email`
+
+**Request Body:**
+
+```json
+{
+  "email": "john@example.com",
+  "token": "a1b2c3d4e5f6g7h8i9j0..."
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Email verified successfully"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Error Responses:**
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "Invalid verification token",
+    "reason": "invalid_verification_token"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "Verification token has expired",
+    "reason": "verification_token_expired"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Features:**
+
+- ✅ Validates token matches email
+- ✅ Checks token expiration (1 hour)
+- ✅ Updates `email_verified_at` timestamp
+- ✅ Deletes token after verification
+- ✅ Audit logging
+
+---
+
+### 9. Switch Tenant
+
+Pindah konteks ke tenant lain dan dapatkan access token baru.
+
+**Endpoint:** `POST /api/v1/auth/switch-tenant`
+
+**Headers:**
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Request Body:**
+
+```json
+{
+  "tenantId": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Successfully switched to tenant",
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": 3600,
+    "tokenType": "Bearer",
+    "tenant": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "Acme Corporation",
+      "code": "ACME",
+      "logoPath": "/logos/acme.png",
+      "status": "active"
+    }
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Error Responses:**
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "You do not have access to this tenant",
+    "reason": "tenant_access_denied"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "Your access to this tenant is inactive",
+    "reason": "tenant_access_inactive"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "This tenant is inactive or has been revoked",
+    "reason": "tenant_inactive_or_revoked"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Features:**
+
+- ✅ Validates user has access to tenant
+- ✅ Checks tenant relation is active
+- ✅ Validates tenant is active and not revoked
+- ✅ Updates `last_tenant_id` in users table
+- ✅ Generates new access token with tenant context
+- ✅ Returns tenant information
+- ✅ Audit logging
+
+**Frontend Flow:**
+
+1. User clicks tenant switcher dropdown
+2. Frontend calls `/switch-tenant` with target `tenantId`
+3. Backend validates access and returns new token
+4. Frontend replaces current access token
+5. All subsequent requests use new tenant context
+
+---
+
+### 10. Toggle User Locked (Owner Only)
+
+Lock atau unlock user account. Hanya tenant owner yang dapat melakukan aksi ini.
+
+**Endpoint:** `POST /api/v1/auth/users/:id/toggle-locked`
+
+**Headers:**
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**Request Body:**
+
+```json
+{}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "User locked successfully",
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "isLocked": true,
+    "lockedAt": "2025-01-15T10:30:00.000Z"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "User unlocked successfully",
+    "userId": "550e8400-e29b-41d4-a716-446655440000",
+    "isLocked": false,
+    "lockedAt": null
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Error Responses:**
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "No active tenant selected",
+    "reason": "no_active_tenant"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "Only tenant owners can lock/unlock users",
+    "reason": "owner_permission_required"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "User not found",
+    "reason": "user_not_found"
+  },
+  "timestamp": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Features:**
+
+- ✅ Owner-only permission (checks `TenantHasUser.isOwner`)
+- ✅ Toggles `is_locked` status
+- ✅ Updates `locked_at` timestamp
+- ✅ Revokes all user sessions when locking
+- ✅ Resets lockout counters when unlocking
+- ✅ Audit logging with old/new values
+
+**Permission Logic:**
+
+1. Get current user's `last_tenant_id`
+2. Query `TenantHasUser` where `userId=currentUser` AND `tenantId=lastTenantId`
+3. Check if `isOwner = true`
+4. If not owner, throw `owner_permission_required`
+
+**Behavior on Lock:**
+
+- Sets `is_locked = true`
+- Sets `locked_at = NOW()`
+- Revokes all user sessions (commented until Prisma generate)
+
+**Behavior on Unlock:**
+
+- Sets `is_locked = false`
+- Sets `locked_at = NULL`
+- Resets `failed_login_counter = 0`
+- Clears `temporary_lock_until = NULL`
+- Clears `force_logout_at = NULL`
+
+---
+
 - ✅ Audit logging
 - ✅ Useful for security incidents
 
