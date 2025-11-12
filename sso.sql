@@ -302,4 +302,81 @@ CREATE TABLE `email_verification_tokens`  (
   INDEX `idx_expires_at`(`expires_at` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
+-- ----------------------------
+-- Table structure for audit_logs
+-- ----------------------------
+DROP TABLE IF EXISTS `audit_logs`;
+CREATE TABLE `audit_logs`  (
+  `id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_type` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `event` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `auditable_table` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `auditable_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `old_values` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+  `new_values` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+  `url` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+  `payload` json NULL,
+  `ip_address` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `user_agent` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `tags` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_user_id`(`user_id` ASC) USING BTREE,
+  INDEX `idx_auditable_table`(`auditable_table` ASC) USING BTREE,
+  INDEX `idx_auditable_id`(`auditable_id` ASC) USING BTREE,
+  INDEX `idx_event`(`event` ASC) USING BTREE,
+  INDEX `idx_user_type`(`user_type` ASC) USING BTREE,
+  INDEX `idx_created_at`(`created_at` ASC) USING BTREE,
+  INDEX `idx_auditable_table_created_at`(`auditable_table` ASC, `created_at` ASC) USING BTREE,
+  INDEX `idx_user_id_event_created_at`(`user_id` ASC, `event` ASC, `created_at` ASC) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Stored Procedure: cleanup_old_audit_logs
+-- ----------------------------
+-- Purpose: Delete audit logs older than 3 months
+-- Usage: 
+--   CALL cleanup_old_audit_logs();
+--   Or schedule with MySQL Event Scheduler
+-- ----------------------------
+DROP PROCEDURE IF EXISTS `cleanup_old_audit_logs`;
+DELIMITER $$
+CREATE PROCEDURE `cleanup_old_audit_logs`()
+BEGIN
+    DECLARE deleted_count INT DEFAULT 0;
+    DECLARE cutoff_date DATETIME;
+    
+    -- Calculate cutoff date (3 months ago)
+    SET cutoff_date = DATE_SUB(NOW(), INTERVAL 3 MONTH);
+    
+    -- Delete old audit logs
+    DELETE FROM `audit_logs` 
+    WHERE `created_at` < cutoff_date;
+    
+    -- Get number of deleted rows
+    SET deleted_count = ROW_COUNT();
+    
+    -- Log the cleanup action (optional)
+    SELECT 
+        deleted_count AS rows_deleted,
+        cutoff_date AS deleted_before,
+        NOW() AS cleanup_executed_at;
+END$$
+DELIMITER ;
+
+-- ----------------------------
+-- MySQL Event Scheduler for automatic cleanup
+-- ----------------------------
+-- Automatically runs cleanup_old_audit_logs() every month at 2 AM
+-- Note: Requires EVENT scheduler to be enabled (SET GLOBAL event_scheduler = ON;)
+-- ----------------------------
+DROP EVENT IF EXISTS `event_cleanup_audit_logs`;
+CREATE EVENT `event_cleanup_audit_logs`
+ON SCHEDULE EVERY 1 MONTH
+STARTS (TIMESTAMP(CURRENT_DATE) + INTERVAL 1 DAY + INTERVAL 2 HOUR)  -- Run at 2 AM on the 1st of each month
+DO
+  CALL cleanup_old_audit_logs();
+
 SET FOREIGN_KEY_CHECKS = 1;
