@@ -417,12 +417,8 @@ export class AuthService {
         },
       });
 
-      // Generate tokens
-      const accessToken = await this.generateAccessToken(
-        user.id,
-        user.email,
-        user.username,
-      );
+      // Generate tokens (JWT only contains session_id)
+      const accessToken = await this.generateAccessToken(sessionId);
       const refreshToken = await this.generateRefreshToken(
         user.id,
         sessionId,
@@ -542,11 +538,9 @@ export class AuthService {
         data: { revoked: true, revokedAt: new Date() },
       });
 
-      // Generate new tokens
+      // Generate new tokens (JWT only contains session_id)
       const newAccessToken = await this.generateAccessToken(
-        storedToken.user.id,
-        storedToken.user.email,
-        storedToken.user.username,
+        storedToken.sessionId,
       );
       const newRefreshToken = await this.generateRefreshToken(
         storedToken.user.id,
@@ -974,16 +968,11 @@ export class AuthService {
 
   /**
    * Generate JWT access token (1 hour expiration)
+   * JWT only contains session_id for security - user data fetched from session on each request
    */
-  private async generateAccessToken(
-    userId: string,
-    email: string,
-    username: string,
-  ): Promise<string> {
+  private async generateAccessToken(sessionId: string): Promise<string> {
     const payload = {
-      sub: userId,
-      email,
-      username,
+      session_id: sessionId,
       type: 'access',
     };
 
@@ -1224,9 +1213,6 @@ export class AuthService {
     request: FastifyRequest,
   ): Promise<{
     message: string;
-    accessToken: string;
-    expiresIn: number;
-    tokenType: string;
     tenant: any;
   }> {
     // Verify user has access to target tenant
@@ -1284,15 +1270,8 @@ export class AuthService {
       data: { lastTenantId: tenantId },
     });
 
-    // Generate new access token with tenant context
-    const payload = {
-      sub: userId,
-      tenantId,
-    };
-
-    const accessToken = this.jwtService.sign(payload, {
-      expiresIn: this.ACCESS_TOKEN_EXPIRATION,
-    });
+    // Note: No need to generate new JWT token since session_id remains the same
+    // The updated lastTenantId will be fetched on next request via session lookup
 
     // Audit log
     await this.auditService.logFromRequest(request, {
@@ -1307,9 +1286,6 @@ export class AuthService {
 
     return {
       message: 'Successfully switched to tenant',
-      accessToken,
-      expiresIn: 3600,
-      tokenType: 'Bearer',
       tenant: {
         id: tenant.id,
         name: tenant.name,
@@ -1427,5 +1403,97 @@ export class AuthService {
       isLocked: updatedUser.isLocked,
       lockedAt: updatedUser.lockedAt,
     };
+  }
+
+  /**
+   * Get all active sessions (devices) for current user
+   */
+  async getUserSessions(
+    userId: string,
+    currentSessionId: string,
+  ): Promise<any[]> {
+    const sessions = await this.prisma.session.findMany({
+      where: {
+        userId,
+        revokedAt: null, // Only active sessions
+      },
+      select: {
+        id: true,
+        deviceName: true,
+        ipAddress: true,
+        userAgent: true,
+        lastActivity: true,
+        createdAt: true,
+      },
+      orderBy: {
+        lastActivity: 'desc',
+      },
+    });
+
+    return sessions.map((session) => ({
+      ...session,
+      isCurrent: session.id === currentSessionId,
+    }));
+  }
+
+  /**
+   * Revoke a specific session (force logout on that device)
+   */
+  async revokeSession(
+    userId: string,
+    sessionId: string,
+    request: FastifyRequest,
+  ): Promise<void> {
+    // Verify session belongs to user
+    const session = await this.prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        userId,
+      },
+    });
+
+    if (!session) {
+      throw new BadRequestException({
+        message: 'Session not found or does not belong to you',
+        reason: 'session_not_found',
+      });
+    }
+
+    if (session.revokedAt) {
+      throw new BadRequestException({
+        message: 'Session already revoked',
+        reason: 'session_already_revoked',
+      });
+    }
+
+    // Revoke session
+    await this.prisma.session.update({
+      where: { id: sessionId },
+      data: { revokedAt: new Date() },
+    });
+
+    // Revoke all refresh tokens for this session
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        sessionId,
+        revoked: false,
+      },
+      data: {
+        revoked: true,
+        revokedAt: new Date(),
+      },
+    });
+
+    // Audit log
+    await this.auditService.logFromRequest(request, {
+      userType: 'User',
+      userId,
+      event: 'session_revoked',
+      auditableTable: 'sessions',
+      auditableId: sessionId,
+      tags: 'security,session,device_management',
+    });
+
+    this.logger.log(`Session ${sessionId} revoked by user ${userId}`);
   }
 }

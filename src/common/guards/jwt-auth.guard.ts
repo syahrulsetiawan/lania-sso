@@ -37,18 +37,56 @@ export class JwtAuthGuard implements CanActivate {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
 
-      // Check if user is locked or force logged out
-      const user = await this.prisma.user.findUnique({
-        where: { id: payload.sub, deletedAt: null },
-        select: {
-          id: true,
-          isLocked: true,
-          forceLogoutAt: true,
-          temporaryLockUntil: true,
+      // Extract session_id from JWT payload
+      const sessionId = payload.session_id;
+      if (!sessionId) {
+        throw new UnauthorizedException({
+          message: 'Invalid token format',
+          reason: 'invalid_token_format',
+        });
+      }
+
+      // Fetch session from database
+      const session = await this.prisma.session.findUnique({
+        where: { id: sessionId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              email: true,
+              phone: true,
+              profilePhotoPath: true,
+              lastTenantId: true,
+              lastServiceKey: true,
+              isLocked: true,
+              forceLogoutAt: true,
+              temporaryLockUntil: true,
+              deletedAt: true,
+            },
+          },
         },
       });
 
-      if (!user) {
+      if (!session) {
+        throw new UnauthorizedException({
+          message: 'Session not found',
+          reason: 'session_not_found',
+        });
+      }
+
+      // Check if session has been revoked
+      if (session.revokedAt) {
+        throw new UnauthorizedException({
+          message: 'Session has been revoked. Please login again.',
+          reason: 'session_revoked',
+        });
+      }
+
+      const user = session.user;
+
+      if (!user || user.deletedAt) {
         throw new UnauthorizedException({
           message: 'User not found or deleted',
           reason: 'user_not_found',
@@ -86,8 +124,18 @@ export class JwtAuthGuard implements CanActivate {
         });
       }
 
-      // Attach user payload to request for use in controllers
-      (request as any).user = payload;
+      // Attach full user data to request (fetched from session, not JWT)
+      (request as any).user = {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        profilePhotoPath: user.profilePhotoPath,
+        lastTenantId: user.lastTenantId,
+        lastServiceKey: user.lastServiceKey,
+        sessionId: session.id,
+      };
     } catch (e) {
       if (e instanceof UnauthorizedException) {
         throw e;

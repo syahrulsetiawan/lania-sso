@@ -8,6 +8,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Delete,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -35,6 +36,8 @@ import {
   SwitchTenantDto,
   SwitchTenantResponseDto,
   ToggleUserLockedResponseDto,
+  GetSessionsResponseDto,
+  RevokeSessionResponseDto,
 } from './dto';
 
 /**
@@ -357,5 +360,88 @@ export class AuthController {
   ): Promise<ToggleUserLockedResponseDto> {
     const currentUserId = request.user.userId || request.user.sub;
     return this.authService.toggleUserLocked(currentUserId, id, request);
+  }
+
+  /**
+   * GET /api/v1/auth/sessions
+   *
+   * Get all active sessions (devices) for current user
+   * Requires authentication (JWT token in Authorization header)
+   *
+   * @param request - Fastify request object with current user info
+   * @returns List of active sessions/devices
+   */
+  @Get('sessions')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Get active sessions',
+    description:
+      'Retrieve all active sessions (devices) for the current user. Useful for device management.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Active sessions retrieved successfully',
+    type: GetSessionsResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @HttpCode(HttpStatus.OK)
+  async getSessions(@Req() request: any): Promise<GetSessionsResponseDto> {
+    const userId = request.user.id;
+    const currentSessionId = request.user.sessionId;
+    const sessions = await this.authService.getUserSessions(
+      userId,
+      currentSessionId,
+    );
+    return {
+      message: 'Active sessions retrieved successfully',
+      sessions,
+    };
+  }
+
+  /**
+   * DELETE /api/v1/auth/sessions/:id
+   *
+   * Revoke a specific session (force logout on that device)
+   * Requires authentication (JWT token in Authorization header)
+   *
+   * @param id - Session ID to revoke
+   * @param request - Fastify request object with current user info
+   * @returns Success message
+   */
+  @Delete('sessions/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Revoke session',
+    description:
+      'Revoke a specific session to force logout on that device. User can only revoke their own sessions.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Session revoked successfully',
+    type: RevokeSessionResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Session not found or already revoked',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+  })
+  @HttpCode(HttpStatus.OK)
+  async revokeSession(
+    @Param('id') id: string,
+    @Req() request: any,
+  ): Promise<RevokeSessionResponseDto> {
+    const userId = request.user.id;
+    await this.authService.revokeSession(userId, id, request);
+    return {
+      message: 'Session revoked successfully',
+    };
   }
 }
