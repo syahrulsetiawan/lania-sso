@@ -56,13 +56,36 @@ async function bootstrap() {
   // Get ConfigService for environment variables
   const configService = app.get(ConfigService);
 
-  // Enable CORS
+  // ========================================================================
+  // ⚠️ CORS CONFIGURATION
+  // ========================================================================
+  // 🔧 DEVELOPMENT MODE: CORS disabled for local testing
+  // ⚠️ TODO: UNCOMMENT BEFORE PRODUCTION DEPLOYMENT!
+  // ========================================================================
+
+  // Enable CORS - PRODUCTION CONFIGURATION (COMMENTED FOR DEVELOPMENT)
+  // 🚨 UNCOMMENT THIS BEFORE PRODUCTION! 🚨
+  /*
   app.enableCors({
-    origin: configService.get<string>('CORS_ORIGIN') || '*',
+    origin: configService.get<string>('CORS_ORIGIN') || 'http://localhost:3000',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
+  */
+
+  // 🔓 DEVELOPMENT ONLY - ALLOW ALL ORIGINS
+  // 🚨 REMOVE THIS IN PRODUCTION! 🚨
+  app.enableCors({
+    origin: true, // Allow all origins (DEVELOPMENT ONLY!)
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
+  // ========================================================================
+  // END CORS CONFIGURATION
+  // ========================================================================
 
   // Security: Rate limiting (register after app creation)
   await fastifyInstance.register(rateLimit as any, {
