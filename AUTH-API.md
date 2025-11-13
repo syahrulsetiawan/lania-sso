@@ -932,6 +932,187 @@ POST /api/v1/auth/reset-password
 
 ---
 
+## 11. Get Active Sessions (Device Management)
+
+Get all active sessions/devices for current user.
+
+**Endpoint:** `GET /api/v1/auth/sessions`
+
+**Headers:**
+
+```
+Authorization: Bearer <access_token>
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Active sessions retrieved successfully",
+    "sessions": [
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440001",
+        "deviceName": "Chrome on Windows",
+        "ipAddress": "192.168.1.100",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
+        "lastActivity": "2025-11-12T14:30:00Z",
+        "createdAt": "2025-11-10T08:00:00Z",
+        "isCurrent": true
+      },
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440002",
+        "deviceName": "Safari on iPhone",
+        "ipAddress": "10.0.0.5",
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0...)...",
+        "lastActivity": "2025-11-11T10:15:00Z",
+        "createdAt": "2025-11-09T12:00:00Z",
+        "isCurrent": false
+      }
+    ]
+  },
+  "timestamp": "2025-11-12T14:35:00.000Z"
+}
+```
+
+**Response Fields:**
+
+- `id`: Session/device ID
+- `deviceName`: Device name (browser + OS)
+- `ipAddress`: IP address of the device
+- `userAgent`: Full user agent string
+- `lastActivity`: Last time this session was used
+- `createdAt`: When session was created (login time)
+- `isCurrent`: Whether this is the current session
+
+**Error Responses:**
+
+- `401 Unauthorized`: Invalid or missing token
+
+**Use Cases:**
+
+- Show list of logged-in devices
+- Allow user to see where they're logged in
+- Identify suspicious sessions
+
+---
+
+## 12. Revoke Session (Force Logout Device)
+
+Revoke a specific session to force logout on that device.
+
+**Endpoint:** `DELETE /api/v1/auth/sessions/:id`
+
+**Headers:**
+
+```
+Authorization: Bearer <access_token>
+```
+
+**URL Parameters:**
+
+- `id` (required): Session ID to revoke
+
+**Example:**
+
+```
+DELETE /api/v1/auth/sessions/550e8400-e29b-41d4-a716-446655440002
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Session revoked successfully"
+  },
+  "timestamp": "2025-11-12T14:40:00.000Z"
+}
+```
+
+**What Happens:**
+
+1. Session marked as revoked (`revokedAt` timestamp set)
+2. All refresh tokens for that session are revoked
+3. User will be forced to login again on that device
+4. Audit log created for security tracking
+
+**Error Responses:**
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "Session not found or does not belong to you",
+    "reason": "session_not_found"
+  },
+  "timestamp": "2025-11-12T14:40:00.000Z"
+}
+```
+
+```json
+{
+  "success": false,
+  "error": {
+    "message": "Session already revoked",
+    "reason": "session_already_revoked"
+  },
+  "timestamp": "2025-11-12T14:40:00.000Z"
+}
+```
+
+- `400 Bad Request`: Session not found or already revoked
+- `401 Unauthorized`: Invalid or missing token
+
+**Use Cases:**
+
+- Logout from specific device remotely
+- Remove access from lost/stolen device
+- Security: Revoke suspicious sessions
+
+---
+
+## JWT Token Security Model
+
+### New Session-Based JWT Strategy
+
+Untuk keamanan, JWT **tidak lagi menyimpan data user lengkap**. Sebagai gantinya:
+
+**JWT Payload (Access Token):**
+
+```json
+{
+  "session_id": "550e8400-e29b-41d4-a716-446655440001",
+  "type": "access",
+  "iat": 1699876543,
+  "exp": 1699880143
+}
+```
+
+**Flow:**
+
+1. **Login** → Create session → JWT berisi `session_id` saja
+2. **Request with JWT** → Middleware extract `session_id` → Query `sessions` table → Check `revoked_at`
+3. **If `revoked_at` NOT NULL** → Return `401 Unauthorized` (session revoked, login ulang)
+4. **If valid** → Fetch full user data → Attach to request
+
+**Keuntungan:**
+
+- ✅ **Security**: Data user tidak exposed di JWT
+- ✅ **Instant Revocation**: Revoke session langsung efektif (tidak perlu tunggu token expire)
+- ✅ **Device Management**: Track & manage semua device yang login
+- ✅ **Flexibility**: Update user data tidak perlu regenerate token
+
+**Refresh Token:**
+
+- Tetap menggunakan SHA-256 hashed token di database
+- Token rotation: setiap refresh, token lama di-revoke, token baru dibuat
+- Expiration: 7 hari (configurable)
+
+---
+
 ## Best Practices
 
 1. **Token Storage (Client-side)**
@@ -941,24 +1122,31 @@ POST /api/v1/auth/reset-password
 
 2. **Token Refresh**
    - Implement automatic token refresh before expiration
-   - Handle 401 errors gracefully
+   - Handle 401 errors gracefully (especially `session_revoked`)
    - Retry failed requests after token refresh
+   - If `reason: "session_revoked"` → Force logout dan redirect ke login
 
-3. **Password Reset**
+3. **Device Management**
+   - Show active sessions in user settings
+   - Allow users to revoke suspicious sessions
+   - Highlight current device with `isCurrent: true`
+
+4. **Password Reset**
    - Always validate email on client-side
    - Show consistent message to prevent email enumeration
    - Implement CAPTCHA for forgot password (future enhancement)
 
-4. **Logout**
+5. **Logout**
    - Always call logout endpoint on user logout
    - Clear all tokens from storage
    - Redirect to login page
 
-5. **Security**
+6. **Security**
    - Use HTTPS in production
    - Implement CSRF protection
    - Add rate limiting
    - Monitor audit logs for suspicious activity
+   - Implement session timeout (auto-revoke after X days inactive)
 
 ---
 
@@ -968,12 +1156,14 @@ POST /api/v1/auth/reset-password
 2. ✅ All endpoints implemented
 3. ✅ Audit logging integrated
 4. ✅ Email service ready
-5. ⏳ Run database migration: `mysql -u root -p lania_sso < sso.sql`
-6. ⏳ Generate Prisma client: `npx prisma generate`
-7. ⏳ Install dependencies: `npm install bcrypt uuid`
-8. ⏳ Test all endpoints
-9. ⏳ Configure email SMTP for production
-10. ⏳ Add Swagger documentation (optional)
+5. ✅ Session-based JWT security implemented
+6. ✅ Device management endpoints added
+7. ⏳ Run database migration: `mysql -u root -p lania_sso < sso.sql`
+8. ⏳ Generate Prisma client: `npx prisma generate`
+9. ⏳ Install dependencies: `npm install bcrypt uuid`
+10. ⏳ Test all endpoints
+11. ⏳ Configure email SMTP for production
+12. ⏳ Add Swagger documentation (optional)
 
 ---
 

@@ -19,24 +19,6 @@ export class SwitchTenantResponseDto {
   message: string;
 
   @ApiProperty({
-    description: 'New access token with tenant context',
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-  })
-  accessToken: string;
-
-  @ApiProperty({
-    description: 'Token expiration in seconds',
-    example: 3600,
-  })
-  expiresIn: number;
-
-  @ApiProperty({
-    description: 'Token type',
-    example: 'Bearer',
-  })
-  tokenType: string;
-
-  @ApiProperty({
     description: 'Current tenant information',
   })
   tenant: {

@@ -6,3 +6,5 @@ export * from './me.dto';
 export * from './email-verification.dto';
 export * from './switch-tenant.dto';
 export * from './toggle-locked.dto';
+export * from './device-management.dto';
+export * from './user-config.dto';
