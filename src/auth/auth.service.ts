@@ -1476,12 +1476,12 @@ export class AuthService {
 
     // Revoke all sessions if locking (commented until Prisma generate)
     // TODO: Uncomment after running npx prisma generate
-    // if (newLockStatus) {
-    //   await this.prisma.userSession.updateMany({
-    //     where: { userId: targetUserId },
-    //     data: { revokedAt: new Date() },
-    //   });
-    // }
+    if (newLockStatus) {
+      await this.prisma.session.updateMany({
+        where: { userId: targetUserId },
+        data: { revokedAt: new Date() },
+      });
+    }
 
     // Audit log
     await this.auditService.logFromRequest(request, {
