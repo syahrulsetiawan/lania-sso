@@ -30,6 +30,8 @@ import {
   SwitchTenantDto,
   SwitchTenantResponseDto,
   ToggleUserLockedResponseDto,
+  UserConfigDto,
+  UserConfigResponseDto,
 } from './dto';
 
 /**
@@ -387,6 +389,31 @@ export class AuthService {
         });
       }
 
+      // Set default lastTenantId and lastServiceKey if empty
+      let updatedLastTenantId = user.lastTenantId;
+      let updatedLastServiceKey = user.lastServiceKey;
+
+      if (!user.lastTenantId) {
+        // Get first tenant relation
+        const firstTenant = user.tenants.find((t) => t.isActive);
+        if (firstTenant) {
+          updatedLastTenantId = firstTenant.tenantId;
+
+          // Get first service for this tenant
+          if (!user.lastServiceKey) {
+            const tenantServices = await this.prisma.tenantHasService.findFirst(
+              {
+                where: { tenantId: firstTenant.tenantId },
+                select: { serviceKey: true },
+              },
+            );
+            if (tenantServices) {
+              updatedLastServiceKey = tenantServices.serviceKey;
+            }
+          }
+        }
+      }
+
       // Reset failed login counter on successful login
       await this.prisma.user.update({
         where: { id: user.id },
@@ -395,6 +422,8 @@ export class AuthService {
           temporaryLockUntil: null,
           lastLoginAt: new Date(),
           lastLoginIp: ipAddress,
+          lastTenantId: updatedLastTenantId,
+          lastServiceKey: updatedLastServiceKey,
         },
       });
 
@@ -446,8 +475,8 @@ export class AuthService {
           email: user.email,
           phone: user.phone,
           profilePhotoPath: user.profilePhotoPath,
-          lastTenantId: user.lastTenantId,
-          lastServiceKey: user.lastServiceKey,
+          lastTenantId: updatedLastTenantId,
+          lastServiceKey: updatedLastServiceKey,
         },
       };
     } catch (error) {
@@ -947,10 +976,85 @@ export class AuthService {
         });
       }
 
-      // Remove password from response
-      const { password, ...userWithoutPassword } = user;
+      // Get detailed current tenant if lastTenantId exists
+      let detailCurrentTenant: any = null;
+      if (user.lastTenantId) {
+        const currentTenant = await this.prisma.tenant.findUnique({
+          where: { id: user.lastTenantId },
+          include: {
+            services: {
+              include: {
+                service: {
+                  select: {
+                    key: true,
+                    name: true,
+                    description: true,
+                    icon: true,
+                    isActive: true,
+                  },
+                },
+              },
+            },
+            configs: {
+              select: {
+                id: true,
+                configKey: true,
+                configValue: true,
+                configType: true,
+              },
+            },
+            licenses: {
+              include: {
+                coreLicense: {
+                  select: {
+                    key: true,
+                    name: true,
+                    description: true,
+                    defaultValue: true,
+                  },
+                },
+              },
+            },
+          },
+        });
 
-      return userWithoutPassword as any;
+        if (currentTenant) {
+          detailCurrentTenant = currentTenant;
+        }
+      }
+
+      // Format user configs into structured object
+      const userConfig = {
+        rtl: false,
+        language: 'id',
+        content_width: 'full',
+        dark_mode: 'by_system',
+        email_notifications: true,
+        menu_layout: 'vertical',
+      };
+
+      // Map database configs to structured format
+      user.userConfigs.forEach((config) => {
+        const key = config.configKey;
+        if (key in userConfig) {
+          // Parse boolean values
+          if (key === 'rtl' || key === 'email_notifications') {
+            userConfig[key] =
+              config.configValue === 'true' || config.configValue === '1';
+          } else {
+            userConfig[key] = config.configValue || userConfig[key];
+          }
+        }
+      });
+
+      // Remove password and userConfigs from response
+      const { password, userConfigs, ...userWithoutPassword } = user;
+
+      return {
+        ...userWithoutPassword,
+        user_config: userConfig,
+        detailCurrentTenant,
+      } as any;
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
@@ -1495,5 +1599,146 @@ export class AuthService {
     });
 
     this.logger.log(`Session ${sessionId} revoked by user ${userId}`);
+  }
+
+  /**
+   * Get user configuration
+   */
+  async getUserConfig(userId: string): Promise<UserConfigResponseDto> {
+    try {
+      // Allowed user config keys
+      const ALLOWED_CONFIG_KEYS = [
+        'rtl',
+        'language',
+        'content_width',
+        'dark_mode',
+        'email_notifications',
+        'menu_layout',
+      ];
+
+      // Default config values
+      const defaultConfig: UserConfigResponseDto = {
+        rtl: false,
+        language: 'id',
+        content_width: 'full',
+        dark_mode: 'by_system',
+        email_notifications: true,
+        menu_layout: 'vertical',
+      };
+
+      // Fetch user configs from database
+      const userConfigs = await this.prisma.userConfig.findMany({
+        where: { userId },
+        select: {
+          configKey: true,
+          configValue: true,
+        },
+      });
+
+      // Merge with defaults
+      const config = { ...defaultConfig };
+      userConfigs.forEach((item) => {
+        const key = item.configKey;
+        // Only use allowed keys
+        if (ALLOWED_CONFIG_KEYS.includes(key) && key in config) {
+          // Parse boolean values
+          if (key === 'rtl' || key === 'email_notifications') {
+            config[key] =
+              item.configValue === 'true' || item.configValue === '1';
+          } else {
+            config[key] = item.configValue || '';
+          }
+        }
+      });
+
+      return config;
+    } catch (error) {
+      this.logger.error('Get user config error:', error);
+      throw new BadRequestException(
+        'An error occurred while fetching user configuration',
+      );
+    }
+  }
+
+  /**
+   * Update user configuration
+   */
+  async updateUserConfig(
+    userId: string,
+    configDto: UserConfigDto,
+    request: FastifyRequest,
+  ): Promise<UserConfigResponseDto> {
+    try {
+      // Allowed user config keys
+      const ALLOWED_CONFIG_KEYS = [
+        'rtl',
+        'language',
+        'content_width',
+        'dark_mode',
+        'email_notifications',
+        'menu_layout',
+      ];
+
+      // Update each config key-value pair
+      const configEntries = Object.entries(configDto).filter(
+        ([_, value]) => value !== undefined,
+      );
+
+      for (const [key, value] of configEntries) {
+        // Only update allowed keys
+        if (!ALLOWED_CONFIG_KEYS.includes(key)) {
+          continue;
+        }
+
+        const existingConfig = await this.prisma.userConfig.findFirst({
+          where: {
+            userId,
+            configKey: key,
+          },
+        });
+
+        if (existingConfig) {
+          await this.prisma.userConfig.update({
+            where: { id: existingConfig.id },
+            data: {
+              configValue: String(value),
+              updatedAt: new Date(),
+            },
+          });
+        } else {
+          await this.prisma.userConfig.create({
+            data: {
+              id: uuidv4(),
+              userId,
+              configKey: key,
+              configValue: String(value),
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          });
+        }
+      }
+
+      // Audit log
+      await this.auditService.logFromRequest(request, {
+        userType: 'User',
+        userId,
+        event: 'user_config_updated',
+        auditableTable: 'user_configs',
+        auditableId: userId,
+        newValues: configDto,
+        tags: 'user,config,preferences',
+      });
+
+      this.logger.log(`User ${userId} updated configuration`);
+
+      // Return updated config
+      return this.getUserConfig(userId);
+    } catch (error) {
+      this.logger.error('Update user config error:', error);
+      throw new BadRequestException(
+        'An error occurred while updating user configuration',
+      );
+    }
   }
 }
