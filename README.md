@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/NestJS-11.0-red" alt="NestJS" />
   <img src="https://img.shields.io/badge/Fastify-5.6-black" alt="Fastify" />
   <img src="https://img.shields.io/badge/Prisma-6.19-blue" alt="Prisma" />
-  <img src="https://img.shields.io/badge/MySQL-8.0-orange" alt="MySQL" />
+  <img src="https://img.shields.io/badge/PostgreSQL-16-blue" alt="PostgreSQL" />
   <img src="https://img.shields.io/badge/TypeScript-5.0-blue" alt="TypeScript" />
 </p>
 
@@ -68,7 +68,7 @@
 ### Prerequisites
 
 - Node.js 18+
-- MySQL 8.0+
+- PostgreSQL 16+
 - npm or yarn
 
 ### Installation
@@ -83,8 +83,11 @@ npm install -D @types/uuid
 cp .env.example .env
 # Edit .env and set your DATABASE_URL and JWT_SECRET
 
-# 3. Import database
-mysql -u root -p lania_sso < sso.sql
+# 3. Create and import database
+psql -U postgres << EOF
+CREATE DATABASE lania_sso LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+EOF
+psql -U postgres -d lania_sso < lania_sso_postgres.sql
 
 # 4. Generate Prisma client
 npx prisma generate
@@ -266,7 +269,7 @@ PORT=3000
 API_PREFIX=api/v1
 
 # Database
-DATABASE_URL=mysql://root:password@localhost:3306/lania_sso
+DATABASE_URL=postgresql://postgres:password@localhost:5432/lania_sso?schema=public
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key-minimum-32-characters
