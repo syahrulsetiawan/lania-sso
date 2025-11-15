@@ -1,6 +1,6 @@
-# Laniakea SSO - Setup Instructions
+# Laniakea SSO - Setup Instructions (PostgreSQL)
 
-Panduan lengkap untuk setup dan menjalankan Laniakea SSO Authentication System.
+Panduan lengkap untuk setup dan menjalankan Laniakea SSO Authentication System dengan PostgreSQL.
 
 ## ✅ Status Implementasi
 
@@ -40,15 +40,31 @@ npm install @nestjs/swagger
 
 ## 🗄️ Step 2: Setup Database
 
-### 2.1 Import Database Schema
+### 2.1 Create Database
 
-Jalankan file SQL yang sudah Anda buat:
+Buat database terlebih dahulu:
 
 ```powershell
-mysql -u root -p lania_sso < sso.sql
+# Buat database lania_sso
+psql -U postgres << EOF
+CREATE DATABASE lania_sso LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+CREATE DATABASE lania_common LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+EOF
 ```
 
-**Note:** Database `lania_sso` akan dibuat otomatis dari file `sso.sql`.
+### 2.2 Import Database Schema
+
+Jalankan file SQL yang sudah ada:
+
+```powershell
+# Import schema untuk lania_sso
+psql -U postgres -d lania_sso -f lania_sso_postgres.sql
+
+# Import schema untuk lania_common
+psql -U postgres -d lania_common -f lania_common_postgres.sql
+```
+
+**Note:** Database akan terisi dengan extensions, tables, functions, dan demo data.
 
 ### 2.2 Generate Prisma Client
 
@@ -73,8 +89,8 @@ Copy-Item .env.example .env
 Buka `.env` dan sesuaikan konfigurasi:
 
 ```bash
-# Database - Sesuaikan dengan MySQL Anda
-DATABASE_URL="mysql://root:password@localhost:3306/lania_sso"
+# Database - Sesuaikan dengan PostgreSQL Anda
+DATABASE_URL="postgresql://postgres:password@localhost:5432/lania_sso?schema=public"
 
 # JWT Secret - GANTI dengan secret yang kuat
 JWT_SECRET=ganti-dengan-secret-yang-sangat-panjang-dan-random-minimal-32-karakter
@@ -152,9 +168,8 @@ curl -X POST http://localhost:3000/api/v1/auth/logout `
 
 Cek apakah semua tabel sudah ada:
 
-```sql
-USE lania_sso;
-SHOW TABLES;
+```powershell
+psql -U postgres -d lania_sso -c "\dt"
 ```
 
 Expected tables:
@@ -163,17 +178,19 @@ Expected tables:
 - sessions
 - refresh_tokens
 - password_reset_tokens
+- email_verification_tokens
 - failed_login_attempts
 - audit_logs
 - tenants
 - tenant_has_user
+- tenant_has_service
 - user_configs
+- tenant_configs
+- tenant_licenses
 - core_licenses
 - core_services
 - core_status_tenants
 - default_values
-- tenant_configs
-- tenant_licenses
 - tenant_connections
 
 ---
@@ -237,28 +254,20 @@ Get-Content logs/error.log -Tail 50
 
 ### Check Audit Logs
 
-```sql
-SELECT * FROM audit_logs
-ORDER BY created_at DESC
-LIMIT 20;
+```powershell
+psql -U postgres -d lania_sso -c "SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 20;"
 ```
 
 ### Check Active Sessions
 
-```sql
-SELECT s.*, u.username, u.email
-FROM sessions s
-JOIN users u ON s.user_id = u.id
-WHERE s.revoked_at IS NULL
-ORDER BY s.last_activity DESC;
+```powershell
+psql -U postgres -d lania_sso -c "SELECT s.*, u.username, u.email FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.revoked_at IS NULL ORDER BY s.last_activity DESC;"
 ```
 
 ### Check Failed Login Attempts
 
-```sql
-SELECT * FROM failed_login_attempts
-ORDER BY attempted_at DESC
-LIMIT 20;
+```powershell
+psql -U postgres -d lania_sso -c "SELECT * FROM failed_login_attempts ORDER BY attempted_at DESC LIMIT 20;"
 ```
 
 ---
@@ -281,8 +290,8 @@ npx prisma generate
 ### Error: Database connection failed
 
 - Cek DATABASE_URL di `.env`
-- Pastikan MySQL running
-- Cek username/password MySQL
+- Pastikan PostgreSQL running
+- Cek username/password PostgreSQL
 
 ### Error: JWT secret not configured
 
@@ -416,7 +425,12 @@ npm install uuid
 npm install -D @types/uuid
 
 # 2. Setup database
-mysql -u root -p lania_sso < sso.sql
+psql -U postgres << EOF
+CREATE DATABASE lania_sso LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+CREATE DATABASE lania_common LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+EOF
+psql -U postgres -d lania_sso -f lania_sso_postgres.sql
+psql -U postgres -d lania_common -f lania_common_postgres.sql
 
 # 3. Generate Prisma client
 npx prisma generate
@@ -429,7 +443,7 @@ Copy-Item .env.example .env
 npm run start:dev
 
 # 6. Test login endpoint
-curl -X POST http://localhost:3000/api/v1/auth/login -H "Content-Type: application/json" -d '{\"usernameOrEmail\":\"testuser\",\"password\":\"Test123!\"}'
+curl -X POST http://localhost:8000/api/v1/auth/login -H "Content-Type: application/json" -d '{\"usernameOrEmail\":\"superadmin\",\"password\":\"password\",\"deviceName\":\"Test Device\"}'
 ```
 
 ---

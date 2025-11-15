@@ -1,8 +1,9 @@
 # 🚀 PRE-DEPLOYMENT CHECKLIST
 
-**Date**: November 13, 2025  
+**Date**: November 15, 2025  
 **Status**: REVIEW COMPLETE ✅  
-**Ready to Deploy**: YES
+**Ready to Deploy**: YES  
+**Database**: PostgreSQL 16+
 
 ---
 
@@ -10,16 +11,17 @@
 
 ### SQL Files Status
 
-- ✅ `lania_sso.sql` (766 lines)
+- ✅ `lania_sso_postgres.sql` (557 lines)
   - ✅ 18 tables created
-  - ✅ Stored procedure: `cleanup_old_audit_logs()` (3-month cleanup)
-  - ✅ Stored procedure: `cleanup_expired_tokens_and_sessions()` (NEW - daily cleanup)
-  - ✅ Event: `event_cleanup_audit_logs` (monthly)
-  - ✅ Event: `event_cleanup_expired_tokens_and_sessions` (NEW - daily at 2am)
+  - ✅ PostgreSQL extensions: uuid-ossp, pg_stat_statements, pgcrypto, pg_trgm
+  - ✅ Utility functions: get_slow_queries(), generate_secure_token()
+  - ✅ GIN indexes for fuzzy search (users.name, users.email, tenants.name)
+  - ✅ Demo data with sample user and tenant
 
-- ✅ `lania_common.sql` (91,861 lines)
+- ✅ `lania_common_postgres.sql` (230 lines)
   - ✅ 8 shared tables
   - ✅ Regional data (provinces, regencies, districts, villages)
+  - ✅ GIN indexes on all regional tables
   - ✅ File uploads, notifications, user_has_notifications
 
 ### Key Tables Verified
@@ -54,7 +56,7 @@
 ### Deployment Notes
 
 - ⚠️ **DO NOT run `npx prisma migrate` in deployment**
-- ✅ Database schema is managed by `lania_sso.sql` and `lania_common.sql`
+- ✅ Database schema is managed by `lania_sso_postgres.sql` and `lania_common_postgres.sql`
 - ✅ `npx prisma generate` is ONLY for generating TypeScript client
 - ✅ Prisma Client generation does NOT modify database
 - ✅ Schema validation with `npx prisma validate` is safe
@@ -459,18 +461,24 @@ npm test
 ### 2. Database Setup
 
 ```bash
-# Restore databases from SQL files (creates databases automatically)
-mysql -u root -p < lania_sso.sql
-mysql -u root -p < lania_common.sql
+# Create databases
+psql -U postgres << EOF
+CREATE DATABASE lania_sso LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+CREATE DATABASE lania_common LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+EOF
+
+# Restore databases from SQL files
+psql -U postgres -d lania_sso < lania_sso_postgres.sql
+psql -U postgres -d lania_common < lania_common_postgres.sql
 
 # Verify tables
-mysql -u root -p lania_sso -e "SHOW TABLES;"
+psql -U postgres -d lania_sso -c "\dt"
 
-# Verify stored procedures
-mysql -u root -p lania_sso -e "SHOW PROCEDURES;"
+# Verify functions
+psql -U postgres -d lania_sso -c "\df"
 
-# Verify scheduled events
-mysql -u root -p lania_sso -e "SHOW EVENTS;"
+# Verify extensions
+psql -U postgres -d lania_sso -c "\dx"
 ```
 
 ### 3. Generate Prisma Client

@@ -90,7 +90,7 @@ export class AuthController {
   })
   @HttpCode(HttpStatus.OK)
   async getMe(@Req() request: any): Promise<UserMeResponseDto> {
-    const userId = request.user.userId || request.user.sub;
+    const userId = request.user.userId || request.user.sub || request.user.id;
     return this.authService.getMe(userId);
   }
 
@@ -198,7 +198,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async logout(@Req() request: any): Promise<LogoutResponseDto> {
-    const userId = request.user.userId || request.user.sub;
+    const userId = request.user.userId || request.user.sub || request.user.id;
     return this.authService.logout(userId, request);
   }
 
@@ -217,7 +217,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   async logoutAll(@Req() request: any): Promise<LogoutAllResponseDto> {
-    const userId = request.user.userId || request.user.sub;
+    const userId = request.user.userId || request.user.sub || request.user.id;
     return this.authService.logoutAll(userId, request);
   }
 
@@ -320,7 +320,7 @@ export class AuthController {
     @Body() dto: SwitchTenantDto,
     @Req() request: any,
   ): Promise<SwitchTenantResponseDto> {
-    const userId = request.user.userId || request.user.sub;
+    const userId = request.user.userId || request.user.sub || request.user.id;
     return this.authService.switchTenant(userId, dto.tenantId, request);
   }
 
@@ -361,7 +361,8 @@ export class AuthController {
     @Param('id') id: string,
     @Req() request: any,
   ): Promise<ToggleUserLockedResponseDto> {
-    const currentUserId = request.user.userId || request.user.sub;
+    const currentUserId =
+      request.user.userId || request.user.sub || request.user.id;
     return this.authService.toggleUserLocked(currentUserId, id, request);
   }
 

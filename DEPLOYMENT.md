@@ -28,7 +28,7 @@
 - **OS**: Linux/macOS/Windows with WSL2
 - **Node.js**: v20.0.0 or higher
 - **npm**: v10.0.0 or higher
-- **MySQL**: v8.0.0 or higher
+- **PostgreSQL**: v16.0 or higher
 - **Git**: v2.0 or higher
 
 ### Verify Installation
@@ -42,9 +42,9 @@ node --version
 npm --version
 # Expected: v10.x.x or higher
 
-# Check MySQL version
-mysql --version
-# Expected: Ver 8.0.x or higher
+# Check PostgreSQL version
+psql --version
+# Expected: psql (PostgreSQL) 16.x or higher
 
 # Check Git version
 git --version
@@ -53,17 +53,17 @@ git --version
 
 ### Required Privileges
 
-- MySQL root or user with privileges:
+- PostgreSQL superuser or user with privileges:
   - CREATE DATABASE
   - CREATE TABLE
-  - CREATE PROCEDURE
-  - CREATE EVENT
+  - CREATE FUNCTION
+  - CREATE EXTENSION
   - GRANT (if creating new user)
 
 ### Network Requirements
 
 - Port 8000 available (Backend API)
-- Port 3306 available (MySQL)
+- Port 5432 available (PostgreSQL)
 - Outbound SMTP access (for email notifications)
 
 ---
@@ -117,41 +117,44 @@ code .env
 # DATABASE_URL=mysql://root:password@localhost:3306/lania_sso
 ```
 
-### Step 4: Create & Configure MySQL Database
+### Step 4: Create & Configure PostgreSQL Database
 
 ```bash
 # Create user for the application
-mysql -u root -p << EOF
-CREATE USER IF NOT EXISTS 'lania_user'@'localhost' IDENTIFIED BY 'secure_password';
-GRANT ALL PRIVILEGES ON lania_sso.* TO 'lania_user'@'localhost';
-GRANT ALL PRIVILEGES ON lania_common.* TO 'lania_user'@'localhost';
-FLUSH PRIVILEGES;
+psql -U postgres << EOF
+CREATE USER lania_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE lania_sso TO lania_user;
+GRANT ALL PRIVILEGES ON DATABASE lania_common TO lania_user;
 EOF
 
 # Then update .env:
-# DATABASE_URL=mysql://lania_user:secure_password@localhost:3306/lania_sso
+# DATABASE_URL=postgresql://lania_user:secure_password@localhost:5432/lania_sso?schema=public
 ```
 
 ### Step 5: Restore Database from SQL Files
 
 ```bash
-# Import SQL schema files (databases will be created automatically)
-mysql -u lania_user -p < lania_sso.sql
-mysql -u lania_user -p < lania_common.sql
+# Create databases first
+psql -U postgres << EOF
+CREATE DATABASE lania_sso LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+CREATE DATABASE lania_common LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+GRANT ALL PRIVILEGES ON DATABASE lania_sso TO lania_user;
+GRANT ALL PRIVILEGES ON DATABASE lania_common TO lania_user;
+EOF
+
+# Import SQL schema files
+psql -U lania_user -d lania_sso < lania_sso_postgres.sql
+psql -U lania_user -d lania_common < lania_common_postgres.sql
 
 # Verify tables were created
-mysql -u lania_user -p lania_sso -e "SHOW TABLES;"
+psql -U lania_user -d lania_sso -c "\dt"
 
 # Expected output:
-# Tables_in_lania_sso
-# audit_logs
-# core_licenses
-# core_services
-# ...etc (18 tables total)
+# 18 tables: audit_logs, core_licenses, core_services, etc.
 
-# Verify stored procedures and events
-mysql -u lania_user -p lania_sso -e "SHOW PROCEDURES;"
-mysql -u lania_user -p lania_sso -e "SHOW EVENTS;"
+# Verify functions and extensions
+psql -U lania_user -d lania_sso -c "\df"
+psql -U lania_user -d lania_sso -c "\dx"
 ```
 
 ### Step 6: Generate Prisma Client
@@ -270,29 +273,27 @@ chmod 600 .env
 
 ```bash
 # Create application user first
-mysql -u root -p << EOF
+psql -U postgres << EOF
 -- Create application user
-CREATE USER IF NOT EXISTS 'staging_user'@'%' IDENTIFIED BY 'secure_password';
+CREATE USER staging_user WITH PASSWORD 'secure_password';
 
--- Grant privileges (databases will be created by SQL import)
-GRANT ALL PRIVILEGES ON lania_sso.* TO 'staging_user'@'%';
-GRANT ALL PRIVILEGES ON lania_common.* TO 'staging_user'@'%';
+-- Create databases
+CREATE DATABASE lania_sso LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+CREATE DATABASE lania_common LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
 
--- Grant Event privilege for cleanup procedures
-GRANT EVENT ON *.* TO 'staging_user'@'%';
-
--- Apply changes
-FLUSH PRIVILEGES;
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE lania_sso TO staging_user;
+GRANT ALL PRIVILEGES ON DATABASE lania_common TO staging_user;
 EOF
 
-# Restore database from SQL files (creates databases automatically)
-mysql -u staging_user -p < lania_sso.sql
-mysql -u staging_user -p < lania_common.sql
+# Restore database from SQL files
+psql -U staging_user -d lania_sso < lania_sso_postgres.sql
+psql -U staging_user -d lania_common < lania_common_postgres.sql
 
-# Verify tables, procedures, and events
-mysql -u staging_user -p lania_sso -e "SHOW TABLES;"
-mysql -u staging_user -p lania_sso -e "SHOW PROCEDURES;"
-mysql -u staging_user -p lania_sso -e "SHOW EVENTS;"
+# Verify tables, functions, and extensions
+psql -U staging_user -d lania_sso -c "\dt"
+psql -U staging_user -d lania_sso -c "\df"
+psql -U staging_user -d lania_sso -c "\dx"
 ```
 
 ### Step 5: Build Application for Staging
@@ -542,7 +543,7 @@ JWT_EXPIRES_IN=1h
 JWT_REFRESH_EXPIRES_IN=7d
 
 # Database - Production instance
-DATABASE_URL=mysql://prod_user:production_secure_password@prod-db-01.internal:3306/lania_sso
+DATABASE_URL=postgresql://prod_user:production_secure_password@prod-db-01.internal:5432/lania_sso?schema=public
 
 # Security
 MAX_FAILED_LOGIN_ATTEMPTS=5
@@ -561,31 +562,27 @@ chown deploy:deploy .env
 
 ```bash
 # Create application user with restricted privileges
-mysql -u root -p -h prod-db-01.internal << EOF
+psql -U postgres -h prod-db-01.internal << EOF
 -- Create application user with restricted privileges
-CREATE USER IF NOT EXISTS 'prod_user'@'%' IDENTIFIED BY 'production_secure_password';
+CREATE USER prod_user WITH PASSWORD 'production_secure_password';
 
--- Grant application privileges (databases will be created by SQL import)
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES
-  ON lania_sso.* TO 'prod_user'@'%';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES
-  ON lania_common.* TO 'prod_user'@'%';
+-- Create databases
+CREATE DATABASE lania_sso LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+CREATE DATABASE lania_common LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
 
--- Grant Event privilege (for cleanup procedures)
-GRANT EVENT ON *.* TO 'prod_user'@'%';
-
--- Apply changes
-FLUSH PRIVILEGES;
+-- Grant application privileges
+GRANT ALL PRIVILEGES ON DATABASE lania_sso TO prod_user;
+GRANT ALL PRIVILEGES ON DATABASE lania_common TO prod_user;
 EOF
 
-# Restore database from SQL files (creates databases automatically)
-mysql -u prod_user -p -h prod-db-01.internal < lania_sso.sql
-mysql -u prod_user -p -h prod-db-01.internal < lania_common.sql
+# Restore database from SQL files
+psql -U prod_user -h prod-db-01.internal -d lania_sso < lania_sso_postgres.sql
+psql -U prod_user -h prod-db-01.internal -d lania_common < lania_common_postgres.sql
 
-# Verify tables, procedures, and events
-mysql -u prod_user -p -h prod-db-01.internal lania_sso -e "SHOW TABLES;"
-mysql -u prod_user -p -h prod-db-01.internal lania_sso -e "SHOW PROCEDURES;"
-mysql -u prod_user -p -h prod-db-01.internal lania_sso -e "SHOW EVENTS;"
+# Verify tables, functions, and extensions
+psql -U prod_user -h prod-db-01.internal -d lania_sso -c "\dt"
+psql -U prod_user -h prod-db-01.internal -d lania_sso -c "\df"
+psql -U prod_user -h prod-db-01.internal -d lania_sso -c "\dx"
 ```
 
 ### Step 5: Build for Production
@@ -607,7 +604,7 @@ ls -la dist/
 # dist/tenants/...
 
 # NOTE: We do NOT run "prisma migrate" because:
-# - Database already restored from SQL files (lania_sso.sql & lania_common.sql)
+# - Database already restored from SQL files (lania_sso_postgres.sql & lania_common_postgres.sql)
 # - npx prisma generate only creates client code for TypeScript
 # - No database modifications needed
 ```
@@ -805,18 +802,22 @@ DB_HOST="prod-db-01.internal"
 mkdir -p $BACKUP_DIR
 
 # Backup both databases
-mysqldump -u$DB_USER -p -h$DB_HOST --all-databases > $BACKUP_DIR/lania-sso_$DATE.sql
+pg_dump -U $DB_USER -h $DB_HOST lania_sso > $BACKUP_DIR/lania_sso_$DATE.sql
+pg_dump -U $DB_USER -h $DB_HOST lania_common > $BACKUP_DIR/lania_common_$DATE.sql
 
-# Compress backup
-gzip $BACKUP_DIR/lania-sso_$DATE.sql
+# Compress backups
+gzip $BACKUP_DIR/lania_sso_$DATE.sql
+gzip $BACKUP_DIR/lania_common_$DATE.sql
 
 # Remove backups older than 7 days
 find $BACKUP_DIR -name "*.sql.gz" -mtime +7 -delete
 
 # Upload to S3 (optional)
-# aws s3 cp $BACKUP_DIR/lania-sso_$DATE.sql.gz s3://backup-bucket/lania-sso/
+# aws s3 cp $BACKUP_DIR/lania_sso_$DATE.sql.gz s3://backup-bucket/lania-sso/
+# aws s3 cp $BACKUP_DIR/lania_common_$DATE.sql.gz s3://backup-bucket/lania-sso/
 
-echo "Backup completed: $BACKUP_DIR/lania-sso_$DATE.sql.gz"
+echo "Backup completed: $BACKUP_DIR/lania_sso_$DATE.sql.gz"
+echo "Backup completed: $BACKUP_DIR/lania_common_$DATE.sql.gz"
 EOF
 
 chmod +x /opt/laniakea/backup-lania-sso.sh
@@ -854,56 +855,60 @@ pm2 monit
 
 **⚠️ We use SQL file restoration, NOT Prisma migrations:**
 
-- ✅ Database schema is managed via `lania_sso.sql` and `lania_common.sql`
+- ✅ Database schema is managed via `lania_sso_postgres.sql` and `lania_common_postgres.sql`
 - ✅ `npx prisma generate` is used ONLY to generate TypeScript client
 - ❌ `npx prisma migrate` is NEVER used in deployment
-- ❌ Manual database creation is NOT needed (SQL files handle this)
+- ❌ Manual database creation is handled by SQL files
 
 ### Step 1: Create Application User
 
 ```bash
 # For development/testing
-mysql -u root -p << EOF
-CREATE USER 'lania_user'@'localhost' IDENTIFIED BY 'lania_password';
-GRANT ALL PRIVILEGES ON lania_sso.* TO 'lania_user'@'localhost';
-GRANT ALL PRIVILEGES ON lania_common.* TO 'lania_user'@'localhost';
-GRANT EVENT ON *.* TO 'lania_user'@'localhost';
-FLUSH PRIVILEGES;
+psql -U postgres << EOF
+CREATE USER lania_user WITH PASSWORD 'lania_password';
+GRANT ALL PRIVILEGES ON DATABASE lania_sso TO lania_user;
+GRANT ALL PRIVILEGES ON DATABASE lania_common TO lania_user;
 EOF
 
 # For production (remote access)
-mysql -u root -p -h prod-db-01 << EOF
-CREATE USER 'prod_user'@'%' IDENTIFIED BY 'secure_production_password';
-GRANT SELECT, INSERT, UPDATE, DELETE ON lania_sso.* TO 'prod_user'@'%';
-GRANT SELECT, INSERT, UPDATE, DELETE ON lania_common.* TO 'prod_user'@'%';
-GRANT EVENT ON *.* TO 'prod_user'@'%';
-FLUSH PRIVILEGES;
+psql -U postgres -h prod-db-01 << EOF
+CREATE USER prod_user WITH PASSWORD 'secure_production_password';
+GRANT ALL PRIVILEGES ON DATABASE lania_sso TO prod_user;
+GRANT ALL PRIVILEGES ON DATABASE lania_common TO prod_user;
 EOF
 ```
 
 ### Step 2: Restore Database from SQL Files
 
 ```bash
-# Restore lania_sso database (creates database automatically)
-mysql -u lania_user -p < lania_sso.sql
+# Create databases first
+psql -U postgres << EOF
+CREATE DATABASE lania_sso LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+CREATE DATABASE lania_common LOCALE_PROVIDER = 'libc' LOCALE = 'en_US.UTF-8' TEMPLATE template0;
+GRANT ALL PRIVILEGES ON DATABASE lania_sso TO lania_user;
+GRANT ALL PRIVILEGES ON DATABASE lania_common TO lania_user;
+EOF
 
-# Restore lania_common database (creates database automatically)
-mysql -u lania_user -p < lania_common.sql
+# Restore lania_sso database
+psql -U lania_user -d lania_sso < lania_sso_postgres.sql
+
+# Restore lania_common database
+psql -U lania_user -d lania_common < lania_common_postgres.sql
 
 # Verify databases created
-mysql -u lania_user -p -e "SHOW DATABASES;"
+psql -U lania_user -d postgres -c "SELECT datname FROM pg_database WHERE datname IN ('lania_sso', 'lania_common');"
 
 # Verify tables (should be 18 tables in lania_sso)
-mysql -u lania_user -p lania_sso -e "SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema='lania_sso';"
+psql -U lania_user -d lania_sso -c "SELECT COUNT(*) as table_count FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';"
 # Expected: 18 tables
 
-# Verify stored procedures
-mysql -u lania_user -p lania_sso -e "SHOW PROCEDURES;"
-# Expected: cleanup_old_audit_logs, cleanup_expired_tokens_and_sessions
+# Verify functions
+psql -U lania_user -d lania_sso -c "\df"
+# Expected: get_slow_queries, generate_secure_token
 
-# Verify scheduled events
-mysql -u lania_user -p lania_sso -e "SHOW EVENTS;"
-# Expected: event_cleanup_audit_logs, event_cleanup_expired_tokens_and_sessions
+# Verify extensions
+psql -U lania_user -d lania_sso -c "\dx"
+# Expected: uuid-ossp, pg_stat_statements, pgcrypto, pg_trgm
 ```
 
 ### Step 3: Verify Sample Data
@@ -913,12 +918,12 @@ mysql -u lania_user -p lania_sso -e "SHOW EVENTS;"
 # Username: superadmin
 # Email: syahrulsetiawan72@gmail.com
 # Password: password (bcrypt hashed)
-# Tenant: Demo (demo)
+# Tenant: Demo Company (demo_company)
 
 # Verify seeded data
-mysql -u lania_user -p lania_sso -e "SELECT id, name, username, email FROM users LIMIT 5;"
+psql -U lania_user -d lania_sso -c "SELECT id, name, username, email FROM users LIMIT 5;"
 
-mysql -u lania_user -p lania_sso -e "SELECT id, name, code, status FROM tenants LIMIT 5;"
+psql -U lania_user -d lania_sso -c "SELECT id, name, code, status FROM tenants LIMIT 5;"
 ```
 
 ### Step 4: Generate Prisma Client
@@ -1042,15 +1047,15 @@ curl -X GET http://localhost:8000/api/v1/auth/me \
 
 ```bash
 # Verify table structure
-mysql -u lania_user -p lania_sso -e "DESC users;"
-mysql -u lania_user -p lania_sso -e "DESC sessions;"
-mysql -u lania_user -p lania_sso -e "DESC user_configs;"
+psql -U lania_user -d lania_sso -c "\d users"
+psql -U lania_user -d lania_sso -c "\d sessions"
+psql -U lania_user -d lania_sso -c "\d user_configs"
 
-# Verify stored procedures
-mysql -u lania_user -p lania_sso -e "CALL cleanup_expired_tokens_and_sessions();"
+# Verify functions
+psql -U lania_user -d lania_sso -c "SELECT * FROM get_slow_queries(1000);"
 
-# Verify events
-mysql -u lania_user -p lania_sso -e "SELECT EVENT_NAME, EVENT_TYPE, STATUS FROM information_schema.EVENTS WHERE EVENT_SCHEMA='lania_sso';"
+# Verify extensions
+psql -U lania_user -d lania_sso -c "SELECT extname, extversion FROM pg_extension;"
 ```
 
 ---
@@ -1094,7 +1099,7 @@ mysql -u lania_user -p lania_sso -e "SELECT EVENT_NAME, EVENT_TYPE, STATUS FROM 
 curl -s http://localhost:8000/api/v1/health | jq .
 
 # Check database connectivity
-mysql -u lania_user -p -e "SELECT NOW();"
+psql -U lania_user -d lania_sso -c "SELECT NOW();"
 
 # Check PM2 app status
 pm2 status
@@ -1107,9 +1112,9 @@ pm2 logs lania-sso-prod --lines 50
 # Monitor CPU and memory with PM2
 pm2 monit
 
-# Monitor database with MySQL
-mysql -u lania_user -p -e "SHOW PROCESSLIST;"
-mysql -u lania_user -p -e "SHOW STATUS LIKE 'Threads%';"
+# Monitor database with PostgreSQL
+psql -U lania_user -d lania_sso -c "SELECT * FROM pg_stat_activity WHERE datname = 'lania_sso';"
+psql -U lania_user -d lania_sso -c "SELECT count(*) as active_connections FROM pg_stat_activity WHERE datname = 'lania_sso' AND state = 'active';"
 ```
 
 ### Log Management
@@ -1129,14 +1134,14 @@ tail -f logs/error.log
 ### Database Maintenance
 
 ```bash
-# Run manual cleanup
-mysql -u lania_user -p lania_sso -e "CALL cleanup_expired_tokens_and_sessions();"
+# PostgreSQL doesn't require manual cleanup - use pg_cron if needed
+# Or implement cleanup via application-level cron jobs
 
-# Optimize tables
-mysql -u lania_user -p lania_sso -e "OPTIMIZE TABLE users, sessions, refresh_tokens, audit_logs;"
+# Vacuum and analyze tables for optimization
+psql -U lania_user -d lania_sso -c "VACUUM ANALYZE users, sessions, refresh_tokens, audit_logs;"
 
 # Check table statistics
-mysql -u lania_user -p lania_sso -e "ANALYZE TABLE users, sessions, refresh_tokens;"
+psql -U lania_user -d lania_sso -c "SELECT schemaname, tablename, n_tup_ins, n_tup_upd, n_tup_del FROM pg_stat_user_tables;"
 ```
 
 ---
@@ -1165,17 +1170,17 @@ npm run build
 ### Database Connection Issues
 
 ```bash
-# Test MySQL connection
-mysql -u lania_user -p -h 127.0.0.1 -e "SELECT 1;"
+# Test PostgreSQL connection
+psql -U lania_user -h 127.0.0.1 -d lania_sso -c "SELECT 1;"
 
 # Verify DATABASE_URL in .env
 grep DATABASE_URL .env
 
-# Check MySQL service
-sudo systemctl status mysql
+# Check PostgreSQL service
+sudo systemctl status postgresql
 
-# Restart MySQL if needed
-sudo systemctl restart mysql
+# Restart PostgreSQL if needed
+sudo systemctl restart postgresql
 ```
 
 ### High Memory Usage
@@ -1197,8 +1202,8 @@ node --inspect --max-old-space-size=2048 dist/main.js
 ### Slow API Responses
 
 ```bash
-# Check database queries
-mysql -u lania_user -p lania_sso -e "SET GLOBAL slow_query_log='ON'; SET GLOBAL long_query_time=2;"
+# Check database queries using built-in function
+psql -U lania_user -d lania_sso -c "SELECT * FROM get_slow_queries(1000);"
 
 # Monitor Nginx response times
 tail -f /var/log/nginx/lania-sso-access.log
