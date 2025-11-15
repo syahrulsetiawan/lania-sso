@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Lania SSO API
+  lania-sso:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lania-sso-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      API_PREFIX: api/v1
+      # Update DATABASE_URL to point to your existing PostgreSQL
+      # Use 'host.docker.internal' to access host machine services
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:password@host.docker.internal:5432/lania_sso?schema=public}
+      JWT_SECRET: ${JWT_SECRET:-7OZymuVhzaapuw1jpvvC6J7SR7v8NeTv}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://sso-lania.muhammad-syamsurrijal.my.id}
+      CORS_CREDENTIALS: ${CORS_CREDENTIALS:-true}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-15m}
+      MAX_FAILED_LOGIN_ATTEMPTS: ${MAX_FAILED_LOGIN_ATTEMPTS:-5}
+      PASSWORD_RESET_EXPIRATION_MINUTES: ${PASSWORD_RESET_EXPIRATION_MINUTES:-60}
+      SESSION_TIMEOUT_MINUTES: ${SESSION_TIMEOUT_MINUTES:-60}
+      FRONTEND_URL: ${FRONTEND_URL:-https://sso-lania.muhammad-syamsurrijal.my.id}
+      TZ: Asia/Jakarta
+    ports:
+      - "10.29.29.29:8000:3000"
+    volumes:
+      - ./logs:/app/logs
+    # Use host network mode on Linux, or remove networks to access host services
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - lania-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  lania-network:
+    driver: bridge
