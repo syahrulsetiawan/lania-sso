@@ -7,7 +7,7 @@ let appPromise: Promise<NestFastifyApplication> | null = null;
 
 async function getApplication(): Promise<NestFastifyApplication> {
   if (!appPromise) {
-    const logger = new Logger('Bootstrap');
+    const logger = new Logger('VercelHandler');
     appPromise = createApp().catch((error) => {
       logger.error('Failed to initialize NestJS application', error);
       appPromise = null;
@@ -18,13 +18,36 @@ async function getApplication(): Promise<NestFastifyApplication> {
   return appPromise;
 }
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse,
-) {
-  const app = await getApplication();
-  const fastifyInstance = app.getHttpAdapter().getInstance();
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    const app = await getApplication();
 
-  // Fastify exposes the underlying Node HTTP server interface.
-  fastifyInstance.server.emit('request', req, res);
+    // Convert Vercel request to Fastify-compatible format
+    const fastifyInstance = app.getHttpAdapter().getInstance();
+
+    // Use Fastify's inject method for serverless
+    const response = await fastifyInstance.inject({
+      method: req.method as any,
+      url: req.url || '/',
+      headers: req.headers as any,
+      payload: req.body,
+      query: req.query as any,
+    });
+
+    // Set response headers
+    Object.keys(response.headers).forEach((key) => {
+      res.setHeader(key, response.headers[key] as string);
+    });
+
+    // Send response
+    res.status(response.statusCode).send(response.payload);
+  } catch (error) {
+    const logger = new Logger('VercelHandler');
+    logger.error('Handler error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
 }
