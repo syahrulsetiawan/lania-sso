@@ -1,20 +1,40 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+import { Transporter } from 'nodemailer';
 
 /**
  * Email Service for sending emails
- * Note: This is a basic implementation. For production, integrate with:
- * - nodemailer
- * - SendGrid
- * - AWS SES
- * - Mailgun
- * - etc.
  */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
+  private transporter: Transporter;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly configService: ConfigService) {
+    // Initialize nodemailer transporter
+    const mailHost = this.configService.get('MAIL_HOST');
+    const mailPort = this.configService.get('MAIL_PORT');
+    const mailUser = this.configService.get('MAIL_USER');
+    const mailPassword = this.configService.get('MAIL_PASSWORD');
+
+    if (mailHost && mailPort && mailUser && mailPassword) {
+      this.transporter = nodemailer.createTransport({
+        host: mailHost,
+        port: parseInt(mailPort),
+        secure: this.configService.get('MAIL_SECURE') === 'true',
+        auth: {
+          user: mailUser,
+          pass: mailPassword,
+        },
+      });
+      this.logger.log('Email service initialized with SMTP');
+    } else {
+      this.logger.warn(
+        'Email service running in development mode (logging only)',
+      );
+    }
+  }
 
   /**
    * Send password reset email
@@ -112,38 +132,26 @@ This is an automated email. Please do not reply to this message.
 © ${new Date().getFullYear()} Laniakea. All rights reserved.
       `;
 
-      // TODO: Replace with actual email sending implementation
-      // For now, we'll just log it
-      this.logger.log(`
-=== PASSWORD RESET EMAIL ===
+      // Send email via nodemailer or log in development
+      if (this.transporter) {
+        await this.transporter.sendMail({
+          from: this.configService.get('MAIL_FROM'),
+          to: email,
+          subject,
+          text: textContent,
+          html: htmlContent,
+        });
+        this.logger.log(`Password reset email sent to ${email}`);
+      } else {
+        // Development mode: log only
+        this.logger.log(`
+=== PASSWORD RESET EMAIL (DEV MODE) ===
 To: ${email}
 Subject: ${subject}
 Reset URL: ${resetUrl}
-===========================
-      `);
-
-      // Example implementation with nodemailer (commented out):
-      /*
-      const transporter = nodemailer.createTransport({
-        host: this.configService.get('MAIL_HOST'),
-        port: this.configService.get('MAIL_PORT'),
-        secure: this.configService.get('MAIL_SECURE') === 'true',
-        auth: {
-          user: this.configService.get('MAIL_USER'),
-          pass: this.configService.get('MAIL_PASSWORD'),
-        },
-      });
-
-      await transporter.sendMail({
-        from: this.configService.get('MAIL_FROM'),
-        to: email,
-        subject,
-        text: textContent,
-        html: htmlContent,
-      });
-      */
-
-      this.logger.log(`Password reset email sent to ${email}`);
+========================================
+        `);
+      }
     } catch (error) {
       this.logger.error(
         `Failed to send password reset email to ${email}`,
@@ -243,13 +251,26 @@ Best regards,
 Laniakea SSO Team
       `;
 
-      // TODO: Implement actual email sending with nodemailer, SendGrid, etc.
-      this.logger.log(`Email verification sent to ${email}`);
-      this.logger.debug(`Verification URL: ${verificationUrl}`);
-
-      // For development: Log the email content
-      this.logger.debug(`Subject: ${subject}`);
-      this.logger.debug(`Text Content: ${textContent}`);
+      // Send email via nodemailer or log in development
+      if (this.transporter) {
+        await this.transporter.sendMail({
+          from: this.configService.get('MAIL_FROM'),
+          to: email,
+          subject,
+          text: textContent,
+          html: htmlContent,
+        });
+        this.logger.log(`Email verification sent to ${email}`);
+      } else {
+        // Development mode: log only
+        this.logger.log(`
+=== EMAIL VERIFICATION (DEV MODE) ===
+To: ${email}
+Subject: ${subject}
+Verification URL: ${verificationUrl}
+======================================
+        `);
+      }
     } catch (error) {
       this.logger.error(
         `Failed to send email verification to ${email}:`,

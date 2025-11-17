@@ -15,7 +15,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 
 /**
  * Creates and configures the NestJS Fastify application without binding to a port.
- * Can be reused for both long-lived servers and serverless handlers (Vercel).
+ * Can be reused for both long-lived servers and application bootstrap.
  */
 export async function createApp(): Promise<NestFastifyApplication> {
   const fastifyAdapter = new FastifyAdapter({
