@@ -1,8 +1,15 @@
 import { format, createLogger, transports } from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const LOG_DIR = 'logs';
 const { combine, timestamp, printf, colorize, errors } = format;
+
+// Ensure logs directory exists
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+}
 
 /**
  * Custom log format for Winston
