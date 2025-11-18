@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { EmailService } from './email.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuditModule } from '../audit/audit.module';
+import { TenantRlsModule } from '../common/tenant-rls.module';
 
 /**
  * Authentication Module
@@ -15,6 +16,7 @@ import { AuditModule } from '../audit/audit.module';
   imports: [
     PrismaModule,
     AuditModule,
+    TenantRlsModule,
     ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

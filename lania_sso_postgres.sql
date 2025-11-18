@@ -546,6 +546,56 @@ $$ LANGUAGE plpgsql;
 -- SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
 
 -- ============================================================================
+-- ROW LEVEL SECURITY (RLS)
+-- ============================================================================
+-- Enable RLS for tenant-aware tables to ensure data isolation between tenants
+-- Application must set current_setting('app.current_tenant_id') before queries
+
+-- Function to get current tenant ID from session context
+CREATE OR REPLACE FUNCTION get_current_tenant_id()
+RETURNS CHAR(36) AS $$
+BEGIN
+    RETURN current_setting('app.current_tenant_id', true)::CHAR(36);
+EXCEPTION WHEN OTHERS THEN
+    RETURN NULL::CHAR(36);
+END;
+$$ LANGUAGE plpgsql;
+
+-- =====================================================
+-- RLS Policies for tenant_configs
+-- =====================================================
+ALTER TABLE tenant_configs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_configs_tenant_isolation ON tenant_configs
+    FOR ALL USING (tenant_id = get_current_tenant_id());
+
+-- =====================================================
+-- RLS Policies for tenant_connections
+-- =====================================================
+ALTER TABLE tenant_connections ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_connections_tenant_isolation ON tenant_connections
+    FOR ALL USING (tenant_id = get_current_tenant_id());
+
+-- =====================================================
+-- RLS Policies for tenant_licenses
+-- =====================================================
+ALTER TABLE tenant_licenses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_licenses_tenant_isolation ON tenant_licenses
+    FOR ALL USING (tenant_id = get_current_tenant_id());
+
+-- =====================================================
+-- RLS Policies for tenant_has_service
+-- =====================================================
+-- RLS Policies for tenant_has_service
+-- =====================================================
+ALTER TABLE tenant_has_service ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_has_service_tenant_isolation ON tenant_has_service
+    FOR ALL USING (tenant_id = get_current_tenant_id());
+
+-- ============================================================================
 -- GRANTS & PERMISSIONS
 -- ============================================================================
 -- Grant permissions to application user (create this user separately)
@@ -554,3 +604,26 @@ $$ LANGUAGE plpgsql;
 -- GRANT USAGE ON SCHEMA public TO lania_user;
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lania_user;
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO lania_user;
+
+-- ============================================================================
+-- IMPORTANT RLS CONFIGURATION NOTES
+-- ============================================================================
+-- 1. Enable RLS is already done in the policies above
+--
+-- 2. Before each query, set the tenant context:
+--    SET app.current_tenant_id = 'your-tenant-id-here';
+--
+-- 3. In your application code, wrap queries like:
+--    SET SESSION app.current_tenant_id = $1; -- Set current tenant ID
+--    [Your SELECT/INSERT/UPDATE/DELETE queries]
+--    RESET app.current_tenant_id; -- Optional cleanup
+--
+-- 4. Example in application (TypeORM/Prisma):
+--    await db.query("SET app.current_tenant_id = $1", [tenantId]);
+--    // Execute your queries
+--
+-- 5. For admin/system queries that bypass RLS, use superuser account
+--
+-- 6. Test RLS:
+--    SELECT * FROM tenant_configs WHERE tenant_id = 'test-id';
+--    -- Should return empty if app.current_tenant_id not set

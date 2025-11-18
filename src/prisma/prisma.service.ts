@@ -105,6 +105,54 @@ export class PrismaService
   }
 
   /**
+   * Set tenant context for RLS
+   * @param tenantId - Tenant ID to set in context
+   */
+  async setTenantContext(tenantId: string): Promise<void> {
+    await this.$executeRaw`SET app.current_tenant_id = ${tenantId};`;
+  }
+
+  /**
+   * Clear tenant context for RLS
+   */
+  async clearTenantContext(): Promise<void> {
+    await this.$executeRaw`RESET app.current_tenant_id;`;
+  }
+
+  /**
+   * Get current tenant context
+   */
+  async getCurrentTenantContext(): Promise<string | null> {
+    const result = await this.$queryRaw<[{ current_setting: string }]>`
+      SELECT current_setting('app.current_tenant_id', true) as current_setting;
+    `;
+
+    const tenantId = result[0]?.current_setting;
+    return tenantId && tenantId !== '' ? tenantId : null;
+  }
+
+  /**
+   * Execute operation with specific tenant context
+   */
+  async withTenantContext<T>(
+    tenantId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const originalContext = await this.getCurrentTenantContext();
+
+    try {
+      await this.setTenantContext(tenantId);
+      return await operation();
+    } finally {
+      if (originalContext) {
+        await this.setTenantContext(originalContext);
+      } else {
+        await this.clearTenantContext();
+      }
+    }
+  }
+
+  /**
    * Enable soft delete for models
    * Add deletedAt field to your models to use this
    *
