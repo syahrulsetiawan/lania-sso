@@ -40,9 +40,7 @@ export class TenantContextMiddleware implements NestMiddleware {
    */
   private async setTenantContext(tenantId: string): Promise<void> {
     try {
-      await this.prisma.$executeRaw`
-        SET app.current_tenant_id = ${tenantId};
-      `;
+      await this.prisma.$executeRaw`SET app.current_tenant_id = ${tenantId}`;
     } catch (error) {
       this.logger.warn(
         `Failed to set RLS context for tenant ${tenantId}:`,
@@ -57,9 +55,7 @@ export class TenantContextMiddleware implements NestMiddleware {
    */
   static async clearTenantContext(prisma: PrismaService): Promise<void> {
     try {
-      await prisma.$executeRaw`
-        RESET app.current_tenant_id;
-      `;
+      await prisma.$executeRaw`RESET app.current_tenant_id`;
     } catch (error) {
       // Ignore errors when clearing context
       console.warn('Failed to clear RLS context:', error);

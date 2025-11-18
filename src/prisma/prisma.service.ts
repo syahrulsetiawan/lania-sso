@@ -109,14 +109,14 @@ export class PrismaService
    * @param tenantId - Tenant ID to set in context
    */
   async setTenantContext(tenantId: string): Promise<void> {
-    await this.$executeRaw`SET app.current_tenant_id = ${tenantId};`;
+    await this.$executeRaw`SET app.current_tenant_id = ${tenantId}`;
   }
 
   /**
    * Clear tenant context for RLS
    */
   async clearTenantContext(): Promise<void> {
-    await this.$executeRaw`RESET app.current_tenant_id;`;
+    await this.$executeRaw`RESET app.current_tenant_id`;
   }
 
   /**

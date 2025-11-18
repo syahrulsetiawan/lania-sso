@@ -56,11 +56,13 @@ export class RlsTestController {
             id: config.id,
             tenantId: config.tenantId,
             configKey: config.configKey,
+            configValue: config.configValue,
           })),
           tenantLicenses: tenantLicenses.map((license) => ({
             id: license.id,
             tenantId: license.tenantId,
             licenseKey: license.licenseKey,
+            licenseValue: license.licenseValue,
           })),
         },
         note: 'All data above should belong to the current tenant only',

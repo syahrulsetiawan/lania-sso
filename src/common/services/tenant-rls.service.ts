@@ -22,9 +22,10 @@ export class TenantRlsService {
     }
 
     try {
-      await this.prisma.$executeRaw`
-        SET app.current_tenant_id = ${tenantId};
-      `;
+      this.logger.debug(`Setting RLS context for tenant: ${tenantId}`);
+      const query = `SET app.current_tenant_id = '${tenantId}'`;
+      await this.prisma.$executeRawUnsafe(query);
+      // await this.prisma.$executeRaw`SET app.current_tenant_id = ${tenantId}`;
 
       this.logger.debug(`✅ RLS context set for tenant: ${tenantId}`);
     } catch (error) {
@@ -41,9 +42,7 @@ export class TenantRlsService {
    */
   async clearTenantContext(): Promise<void> {
     try {
-      await this.prisma.$executeRaw`
-        RESET app.current_tenant_id;
-      `;
+      await this.prisma.$executeRaw`RESET app.current_tenant_id`;
 
       this.logger.debug('🔄 RLS context cleared');
     } catch (error) {
