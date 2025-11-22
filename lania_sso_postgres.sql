@@ -699,3 +699,81 @@ CREATE POLICY tenant_has_service_tenant_isolation ON tenant_has_service
 -- 6. Test RLS:
 --    SELECT * FROM tenant_configs WHERE tenant_id = 'test-id';
 --    -- Should return empty if app.current_tenant_id not set
+
+-- ============================================================================
+-- ADDITIONAL PERFORMANCE INDEXES
+-- ============================================================================
+
+-- =====================================================
+-- Users Table - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_users_last_tenant_id ON users(last_tenant_id);
+CREATE INDEX idx_users_is_locked ON users(is_locked);
+CREATE INDEX idx_users_email_verified_at ON users(email_verified_at);
+CREATE INDEX idx_users_last_tenant_locked ON users(last_tenant_id, is_locked);
+CREATE INDEX idx_users_force_logout_at ON users(force_logout_at) WHERE force_logout_at IS NOT NULL;
+CREATE INDEX idx_users_temporary_lock_until ON users(temporary_lock_until) WHERE temporary_lock_until IS NOT NULL;
+
+-- =====================================================
+-- Tenants Table - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_tenants_is_active ON tenants(is_active);
+CREATE INDEX idx_tenants_deleted_at ON tenants(deleted_at);
+CREATE INDEX idx_tenants_active_status ON tenants(is_active, status);
+CREATE INDEX idx_tenants_expired_at ON tenants(expired_at) WHERE expired_at IS NOT NULL;
+CREATE INDEX idx_tenants_revoked_at ON tenants(revoked_at) WHERE revoked_at IS NOT NULL;
+
+-- =====================================================
+-- Tenant Has User - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_tenant_has_user_user_active ON tenant_has_user(user_id, is_active);
+CREATE INDEX idx_tenant_has_user_tenant_active ON tenant_has_user(tenant_id, is_active);
+CREATE INDEX idx_tenant_has_user_is_owner ON tenant_has_user(is_owner) WHERE is_owner = true;
+
+-- =====================================================
+-- Tenant Has Service - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_tenant_has_service_is_active ON tenant_has_service(is_active);
+CREATE INDEX idx_tenant_has_service_tenant_active ON tenant_has_service(tenant_id, is_active);
+CREATE INDEX idx_tenant_has_service_expired_at ON tenant_has_service(expired_at) WHERE expired_at IS NOT NULL;
+
+-- =====================================================
+-- Refresh Tokens - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_refresh_tokens_revoked ON refresh_tokens(revoked);
+CREATE INDEX idx_refresh_tokens_user_revoked_expires ON refresh_tokens(user_id, revoked, expires_at);
+CREATE INDEX idx_refresh_tokens_session_revoked ON refresh_tokens(session_id, revoked);
+
+-- =====================================================
+-- Sessions - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_sessions_user_revoked ON sessions(user_id, revoked_at);
+CREATE INDEX idx_sessions_user_active ON sessions(user_id) WHERE revoked_at IS NULL;
+
+-- =====================================================
+-- Password Reset Tokens - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at);
+
+-- =====================================================
+-- Email Verification Tokens - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_email_verification_tokens_expires_at ON email_verification_tokens(expires_at);
+
+-- =====================================================
+-- Core Services - Additional Indexes
+-- =====================================================
+CREATE INDEX idx_core_services_is_active ON core_services(is_active);
+
+-- =====================================================
+-- NOTES ON ADDITIONAL INDEXES
+-- =====================================================
+-- 1. Partial indexes (WHERE clause) used for columns with low cardinality
+--    to reduce index size and improve performance
+-- 2. Composite indexes ordered by selectivity (most selective first)
+-- 3. Indexes on foreign keys already covered by FK constraints
+-- 4. These indexes optimize common query patterns:
+--    - User authentication and session management
+--    - Tenant switching and access control
+--    - Token validation and cleanup
+--    - Service activation checks
