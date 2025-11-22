@@ -1603,30 +1603,20 @@ export class AuthService {
 
   /**
    * Get user configuration
+   * Returns all configs defined in core_user_configs
    */
   async getUserConfig(userId: string): Promise<UserConfigResponseDto> {
     try {
-      // Allowed user config keys
-      const ALLOWED_CONFIG_KEYS = [
-        'rtl',
-        'language',
-        'content_width',
-        'dark_mode',
-        'email_notifications',
-        'menu_layout',
-      ];
+      // Get core configs to know what configs are available
+      const coreConfigs = await this.prisma.coreUserConfig.findMany({
+        select: {
+          key: true,
+          defaultValue: true,
+          configType: true,
+        },
+      });
 
-      // Default config values
-      const defaultConfig: UserConfigResponseDto = {
-        rtl: false,
-        language: 'id',
-        content_width: 'full',
-        dark_mode: 'by_system',
-        email_notifications: true,
-        menu_layout: 'vertical',
-      };
-
-      // Fetch user configs from database
+      // Get user-specific configs
       const userConfigs = await this.prisma.userConfig.findMany({
         where: { userId },
         select: {
@@ -1635,23 +1625,29 @@ export class AuthService {
         },
       });
 
-      // Merge with defaults
-      const config = { ...defaultConfig };
-      userConfigs.forEach((item) => {
-        const key = item.configKey;
-        // Only use allowed keys
-        if (ALLOWED_CONFIG_KEYS.includes(key) && key in config) {
-          // Parse boolean values
-          if (key === 'rtl' || key === 'email_notifications') {
-            config[key] =
-              item.configValue === 'true' || item.configValue === '1';
-          } else {
-            config[key] = item.configValue || '';
-          }
-        }
+      // Build config map with defaults from core
+      const configMap = new Map<string, any>();
+      coreConfigs.forEach((coreConfig) => {
+        configMap.set(coreConfig.key, coreConfig.defaultValue || '');
       });
 
-      return config;
+      // Override with user-specific values
+      userConfigs.forEach((config) => {
+        configMap.set(config.configKey, config.configValue);
+      });
+
+      // Parse values based on type
+      const response: UserConfigResponseDto = {
+        theme: configMap.get('theme') || 'light',
+        'content-width': configMap.get('content-width') || 'full',
+        'menu-layout': configMap.get('menu-layout') || 'horizontal',
+        language: configMap.get('language') || 'en',
+        notifications_enabled:
+          configMap.get('notifications_enabled') === 'true',
+        items_per_page: parseInt(configMap.get('items_per_page') || '20', 10),
+      };
+
+      return response;
     } catch (error) {
       this.logger.error('Get user config error:', error);
       throw new BadRequestException(
@@ -1662,6 +1658,7 @@ export class AuthService {
 
   /**
    * Update user configuration
+   * Only allows updating configs defined in core_user_configs
    */
   async updateUserConfig(
     userId: string,
@@ -1669,27 +1666,41 @@ export class AuthService {
     request: FastifyRequest,
   ): Promise<UserConfigResponseDto> {
     try {
-      // Allowed user config keys
-      const ALLOWED_CONFIG_KEYS = [
-        'rtl',
-        'language',
-        'content_width',
-        'dark_mode',
-        'email_notifications',
-        'menu_layout',
-      ];
+      // Get valid config keys from core_user_configs
+      const coreConfigs = await this.prisma.coreUserConfig.findMany({
+        select: { key: true, configType: true },
+      });
 
-      // Update each config key-value pair
-      const configEntries = Object.entries(configDto).filter(
-        ([_, value]) => value !== undefined,
+      const validConfigKeys = new Set(coreConfigs.map((c) => c.key));
+      const configTypeMap = new Map(
+        coreConfigs.map((c) => [c.key, c.configType]),
       );
 
-      for (const [key, value] of configEntries) {
-        // Only update allowed keys
-        if (!ALLOWED_CONFIG_KEYS.includes(key)) {
+      // Process updates
+      const updates = Object.entries(configDto).filter(
+        ([, value]) => value !== undefined,
+      );
+
+      for (const [key, value] of updates) {
+        // Validate config key exists in core
+        if (!validConfigKeys.has(key)) {
+          this.logger.warn(`Skipping invalid config key: ${key}`);
           continue;
         }
 
+        const configType = configTypeMap.get(key);
+        let configValue: string;
+
+        // Convert value to string based on type
+        if (configType === 'boolean') {
+          configValue = String(Boolean(value));
+        } else if (configType === 'integer') {
+          configValue = String(Number(value));
+        } else {
+          configValue = String(value);
+        }
+
+        // Upsert user config
         const existingConfig = await this.prisma.userConfig.findFirst({
           where: {
             userId,
@@ -1701,7 +1712,7 @@ export class AuthService {
           await this.prisma.userConfig.update({
             where: { id: existingConfig.id },
             data: {
-              configValue: String(value),
+              configValue,
               updatedAt: new Date(),
             },
           });
@@ -1711,7 +1722,7 @@ export class AuthService {
               id: uuidv4(),
               userId,
               configKey: key,
-              configValue: String(value),
+              configValue,
               createdAt: new Date(),
               updatedAt: new Date(),
             },
