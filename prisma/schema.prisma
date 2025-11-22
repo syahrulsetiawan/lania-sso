@@ -7,7 +7,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ============================================================================
@@ -106,6 +105,19 @@ model User {
   @@map("users")
 }
 
+/// Core user configuration definitions
+model CoreUserConfig {
+  key          String    @id @db.VarChar(50)
+  name         String    @db.VarChar(50)
+  description  String?   @db.Text
+  defaultValue String?   @map("default_value") @db.Text
+  configType   String    @default("string") @map("config_type") @db.VarChar(50)
+  createdAt    DateTime? @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime? @map("updated_at") @db.Timestamp(6)
+  
+  @@map("core_user_configs")
+}
+
 /// User configurations
 model UserConfig {
   id          String    @id @db.Char(36)
@@ -117,6 +129,7 @@ model UserConfig {
   
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  @@unique([userId, configKey])
   @@index([userId])
   @@index([configKey])
   @@map("user_configs")
@@ -257,6 +270,19 @@ model TenantHasUser {
   @@index([tenantId])
   @@index([userId])
   @@map("tenant_has_user")
+}
+
+/// Core tenant configuration definitions
+model CoreTenantConfig {
+  key          String    @id @db.VarChar(50)
+  name         String    @db.VarChar(50)
+  description  String?   @db.Text
+  defaultValue String?   @map("default_value") @db.Text
+  configType   String    @default("string") @map("config_type") @db.VarChar(50)
+  createdAt    DateTime? @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime? @map("updated_at") @db.Timestamp(6)
+  
+  @@map("core_tenant_configs")
 }
 
 /// Tenant configurations

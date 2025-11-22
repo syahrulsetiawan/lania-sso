@@ -387,23 +387,70 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_table_created ON audit_logs(auditable_table, created_at);
 CREATE INDEX idx_audit_logs_user_event_created ON audit_logs(user_id, event, created_at);
 
+
+-- ============================================================================
+-- CORE USER CONFIGS
+-- ============================================================================
+
+CREATE TABLE core_user_configs (
+    key VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    description TEXT,
+    default_value TEXT,
+    config_type VARCHAR(50) DEFAULT 'string',
+    created_at TIMESTAMP(6),
+    updated_at TIMESTAMP(6)
+);
+
+-- ============================================================================
+-- CORE TENANT CONFIGS
+-- ============================================================================
+
+CREATE TABLE core_tenant_configs (
+    key VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    description TEXT,
+    default_value TEXT,
+    config_type VARCHAR(50) DEFAULT 'string',
+    created_at TIMESTAMP(6),
+    updated_at TIMESTAMP(6)
+);
+
 -- ============================================================================
 -- SEED DATA
 -- ============================================================================
 
+INSERT INTO core_user_configs (key, name, description, default_value, config_type, created_at, updated_at) VALUES
+('theme', 'Theme', 'User interface theme preference', 'light', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('content-width', 'Content Width', 'User interface content width preference', 'full', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('menu-layout', 'Menu Layout', 'User interface menu layout preference', 'horizontal', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('language', 'Language', 'Preferred language for the user interface', 'en', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('notifications_enabled', 'Notifications Enabled', 'Enable or disable notifications', 'true', 'boolean', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('items_per_page', 'Items Per Page', 'Number of items to display per page', '20', 'integer', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO core_tenant_configs (key, name, description, default_value, config_type, created_at, updated_at) VALUES
+
+('default_currency', 'Default Currency', 'Default currency for financial transactions', 'USD', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('number_format', 'Number Format', 'Default number format for the tenant', '{"thousands_separator": ",", "decimal_separator": "."}', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('number_decimal', 'Number Decimal', 'Default number of decimal places for numbers', '2', 'integer', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('enabled_multi_currency', 'Enabled Multi-Currency', 'Enable or disable multi-currency support', 'false', 'boolean', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('timezone', 'Timezone', 'Default timezone for the tenant', 'UTC', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('date_format', 'Date Format', 'Default date format for the tenant', 'YYYY-MM-DD', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 -- Insert core services
 INSERT INTO core_services (key, name, description, icon, is_active, created_at, updated_at) VALUES
-('erp', 'ERP', 'Enterprise Resource Planning', 'mdi-factory', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('admin-portal', 'Admin Portal', 'Enterprise Resource Planning', 'mdi-factory', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('management-stock', 'Management Stock', 'Stock & Inventory Management', 'mdi-warehouse', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('procurement', 'Procurement', 'Procurement & Purchasing', 'mdi-cart', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('salesorder', 'Sales Order', 'Sales Order Management', 'mdi-sale', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('accounting', 'Accounting', 'Accounting & Finance Management', 'mdi-calculator', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('pos', 'POS', 'Point of Sale System', 'mdi-cash-register', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('hrm', 'HRM', 'Human Resource Management', 'mdi-account-group', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('inventory', 'Inventory', 'Warehouse & Inventory Management', 'mdi-warehouse', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('hris', 'HRIS', 'Human Resource Information System', 'mdi-account-group', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- Insert core licenses
 INSERT INTO core_licenses (key, name, description, default_value, created_at, updated_at) VALUES
-('max_users', 'Maximum Users', 'Maximum number of users allowed', '10', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('max_branches', 'Maximum Branches', 'Maximum number of branches allowed', '1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('max_warehouses', 'Maximum Warehouses', 'Maximum number of warehouses allowed', '1', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('multiple_currencies', 'Multiple Currencies', 'Enable or disable multiple currencies', 'false', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('max_users', 'Maximum Users', 'Maximum number of users allowed', '10', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- Insert core status tenants
 INSERT INTO core_status_tenants (key, name, description, created_at, updated_at) VALUES
@@ -426,10 +473,35 @@ INSERT INTO users (id, name, username, email, password, email_verified_at, creat
 INSERT INTO tenant_has_user (tenant_id, user_id, is_active, is_owner, created_at, updated_at) VALUES
 ('550e8400-e29b-41d4-a716-446655440000', '790de8f0-0574-4d28-bd62-d04d4a85b793', true, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
+INSERT INTO tenant_configs (id, tenant_id, config_key, config_value, config_type, created_at, updated_at) VALUES
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'default_currency', 'USD', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'number_format', '{"thousands_separator": ",", "decimal_separator": "."}', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'number_decimal', '2', 'integer', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'enabled_multi_currency', 'false', 'boolean', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'timezone', 'UTC', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'date_format', 'YYYY-MM-DD', 'string', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO user_configs (id, user_id, config_key, config_value, created_at, updated_at) VALUES
+(uuid_generate_v4()::text, '790de8f0-0574-4d28-bd62-d04d4a85b793', 'theme', 'light', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '790de8f0-0574-4d28-bd62-d04d4a85b793', 'content-width', 'full', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '790de8f0-0574-4d28-bd62-d04d4a85b793', 'menu-layout', 'horizontal', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '790de8f0-0574-4d28-bd62-d04d4a85b793', 'language', 'en', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '790de8f0-0574-4d28-bd62-d04d4a85b793', 'notifications_enabled', 'true', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '790de8f0-0574-4d28-bd62-d04d4a85b793', 'items_per_page', '20', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
 -- Add services to tenant
 INSERT INTO tenant_has_service (id, tenant_id, service_key, is_active, created_at, updated_at) VALUES
-(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'erp', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'admin-portal', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'management-stock', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'procurement', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'salesorder', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'hris', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 (uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'accounting', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+INSERT INTO tenant_licenses (id, tenant_id, license_key, license_value, created_at, updated_at) VALUES
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'max_branches', '3', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'max_users', '50', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(uuid_generate_v4()::text, '550e8400-e29b-41d4-a716-446655440000', 'multiple_currencies', 'true', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- ============================================================================
 -- STORED PROCEDURES & FUNCTIONS
@@ -546,6 +618,56 @@ $$ LANGUAGE plpgsql;
 -- SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
 
 -- ============================================================================
+-- ROW LEVEL SECURITY (RLS)
+-- ============================================================================
+-- Enable RLS for tenant-aware tables to ensure data isolation between tenants
+-- Application must set current_setting('app.current_tenant_id') before queries
+
+-- Function to get current tenant ID from session context
+CREATE OR REPLACE FUNCTION get_current_tenant_id()
+RETURNS CHAR(36) AS $$
+BEGIN
+    RETURN current_setting('app.current_tenant_id', true)::CHAR(36);
+EXCEPTION WHEN OTHERS THEN
+    RETURN NULL::CHAR(36);
+END;
+$$ LANGUAGE plpgsql;
+
+-- =====================================================
+-- RLS Policies for tenant_configs
+-- =====================================================
+ALTER TABLE tenant_configs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_configs_tenant_isolation ON tenant_configs
+    FOR ALL USING (tenant_id = get_current_tenant_id());
+
+-- =====================================================
+-- RLS Policies for tenant_connections
+-- =====================================================
+ALTER TABLE tenant_connections ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_connections_tenant_isolation ON tenant_connections
+    FOR ALL USING (tenant_id = get_current_tenant_id());
+
+-- =====================================================
+-- RLS Policies for tenant_licenses
+-- =====================================================
+ALTER TABLE tenant_licenses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_licenses_tenant_isolation ON tenant_licenses
+    FOR ALL USING (tenant_id = get_current_tenant_id());
+
+-- =====================================================
+-- RLS Policies for tenant_has_service
+-- =====================================================
+-- RLS Policies for tenant_has_service
+-- =====================================================
+ALTER TABLE tenant_has_service ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_has_service_tenant_isolation ON tenant_has_service
+    FOR ALL USING (tenant_id = get_current_tenant_id());
+
+-- ============================================================================
 -- GRANTS & PERMISSIONS
 -- ============================================================================
 -- Grant permissions to application user (create this user separately)
@@ -554,3 +676,26 @@ $$ LANGUAGE plpgsql;
 -- GRANT USAGE ON SCHEMA public TO lania_user;
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lania_user;
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO lania_user;
+
+-- ============================================================================
+-- IMPORTANT RLS CONFIGURATION NOTES
+-- ============================================================================
+-- 1. Enable RLS is already done in the policies above
+--
+-- 2. Before each query, set the tenant context:
+--    SET app.current_tenant_id = 'your-tenant-id-here';
+--
+-- 3. In your application code, wrap queries like:
+--    SET SESSION app.current_tenant_id = $1; -- Set current tenant ID
+--    [Your SELECT/INSERT/UPDATE/DELETE queries]
+--    RESET app.current_tenant_id; -- Optional cleanup
+--
+-- 4. Example in application (TypeORM/Prisma):
+--    await db.query("SET app.current_tenant_id = $1", [tenantId]);
+--    // Execute your queries
+--
+-- 5. For admin/system queries that bypass RLS, use superuser account
+--
+-- 6. Test RLS:
+--    SELECT * FROM tenant_configs WHERE tenant_id = 'test-id';
+--    -- Should return empty if app.current_tenant_id not set

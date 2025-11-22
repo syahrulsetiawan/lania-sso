@@ -3,22 +3,28 @@ import {
   ExecutionContext,
   Injectable,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantRlsService } from '../services/tenant-rls.service';
 import { FastifyRequest } from 'fastify';
 
 /**
  * JWT Authentication Guard
- * Validates JWT tokens from Authorization header and attaches payload to request
+ * Validates JWT tokens from Authorization header, attaches payload to request,
+ * and sets tenant context for RLS
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  private readonly logger = new Logger(JwtAuthGuard.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly tenantRlsService: TenantRlsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -136,6 +142,21 @@ export class JwtAuthGuard implements CanActivate {
         lastServiceKey: user.lastServiceKey,
         sessionId: session.id,
       };
+
+      // Set tenant context for RLS if user has a tenant
+      if (user.lastTenantId) {
+        try {
+          await this.tenantRlsService.setTenantContext(user.lastTenantId);
+          this.logger.debug(`RLS context set for tenant: ${user.lastTenantId}`);
+        } catch (error) {
+          this.logger.warn(
+            `Failed to set RLS context for tenant ${user.lastTenantId}:`,
+            error,
+          );
+          // Don't fail authentication if RLS context fails
+          // This ensures the app continues working even if RLS has issues
+        }
+      }
     } catch (e) {
       if (e instanceof UnauthorizedException) {
         throw e;
