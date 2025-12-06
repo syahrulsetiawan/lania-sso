@@ -97,7 +97,7 @@ export class AuthService {
         );
         throw new UnauthorizedException({
           message: 'Invalid credentials',
-          reason: 'invalid_credentials',
+          reason: 'login.invalid_credentials',
         });
       }
 
@@ -116,7 +116,7 @@ export class AuthService {
         });
         throw new UnauthorizedException({
           message: 'Your account has been locked. Please contact support.',
-          reason: 'account_locked',
+          reason: 'login.account_locked',
         });
       }
 
@@ -144,7 +144,7 @@ export class AuthService {
 
         throw new UnauthorizedException({
           message: `Account temporarily locked. Try again in ${minutesRemaining} minute(s).`,
-          reason: 'temporary_locked',
+          reason: 'login.temporary_locked',
           lockedUntil: user.temporaryLockUntil,
           minutesRemaining,
         });
@@ -183,7 +183,7 @@ export class AuthService {
         });
         throw new UnauthorizedException({
           message: 'Your account is not associated with any active tenant.',
-          reason: 'no_active_tenant',
+          reason: 'login.no_active_tenant',
         });
       }
 
@@ -210,7 +210,7 @@ export class AuthService {
         throw new UnauthorizedException({
           message:
             'All your tenants are inactive or revoked. Please contact support.',
-          reason: 'tenant_inactive_or_revoked',
+          reason: 'login.tenant_inactive_or_revoked',
         });
       }
 
@@ -229,7 +229,7 @@ export class AuthService {
         });
         throw new UnauthorizedException({
           message: 'Your account is temporarily suspended.',
-          reason: 'account_suspended',
+          reason: 'login.account_suspended',
         });
       }
 
@@ -289,7 +289,7 @@ export class AuthService {
             payload: {
               failedAttempts,
               forceLogoutUntil,
-              reason: '15_failed_attempts',
+              reason: 'login.15_failed_attempts',
             },
             tags: 'security,account_locked,force_logout',
           });
@@ -331,7 +331,7 @@ export class AuthService {
           throw new UnauthorizedException({
             message:
               'Account temporarily locked for 15 minutes due to multiple failed login attempts.',
-            reason: 'temporary_locked_15min',
+            reason: 'login.temporary_locked_15min',
             lockedUntil: lockUntil,
             failedAttempts,
             minutesRemaining: 15,
@@ -366,7 +366,7 @@ export class AuthService {
 
           throw new UnauthorizedException({
             message: `Invalid credentials. Account temporarily locked for 5 minutes. (Attempt ${failedAttempts}/5)`,
-            reason: 'temporary_locked_5min',
+            reason: 'login.temporary_locked_5min',
             lockedUntil: lockUntil,
             failedAttempts,
             minutesRemaining: 5,
@@ -375,7 +375,7 @@ export class AuthService {
 
         throw new UnauthorizedException({
           message: 'Invalid credentials',
-          reason: 'invalid_credentials',
+          reason: 'login.invalid_credentials',
         });
       }
 
@@ -518,7 +518,7 @@ export class AuthService {
       if (!storedToken) {
         throw new UnauthorizedException({
           message: 'Invalid refresh token',
-          reason: 'invalid_refresh_token',
+          reason: 'refreshToken.invalid_refresh_token',
         });
       }
 
@@ -537,7 +537,7 @@ export class AuthService {
         });
         throw new UnauthorizedException({
           message: 'Refresh token has been revoked',
-          reason: 'refresh_token_revoked',
+          reason: 'refreshToken.refresh_token_revoked',
         });
       }
 
@@ -549,7 +549,7 @@ export class AuthService {
         });
         throw new UnauthorizedException({
           message: 'Refresh token has expired',
-          reason: 'refresh_token_expired',
+          reason: 'refreshToken.refresh_token_expired',
         });
       }
 
@@ -557,7 +557,7 @@ export class AuthService {
       if (storedToken.session.revokedAt) {
         throw new UnauthorizedException({
           message: 'Session has been terminated',
-          reason: 'session_terminated',
+          reason: 'refreshToken.session_terminated',
         });
       }
 
@@ -714,7 +714,7 @@ export class AuthService {
       if (password !== passwordConfirmation) {
         throw new BadRequestException({
           message: 'Passwords do not match',
-          reason: 'password_mismatch',
+          reason: 'resetPassword.password_mismatch',
         });
       }
 
@@ -726,7 +726,7 @@ export class AuthService {
       if (!resetToken || resetToken.token !== token) {
         throw new BadRequestException({
           message: 'Invalid or expired reset token',
-          reason: 'invalid_reset_token',
+          reason: 'resetPassword.invalid_reset_token',
         });
       }
 
@@ -735,7 +735,7 @@ export class AuthService {
         await this.prisma.passwordResetToken.delete({ where: { email } });
         throw new BadRequestException({
           message: 'Reset token has expired',
-          reason: 'reset_token_expired',
+          reason: 'resetPassword.reset_token_expired',
         });
       }
 
@@ -747,7 +747,7 @@ export class AuthService {
       if (!user) {
         throw new BadRequestException({
           message: 'User not found',
-          reason: 'user_not_found',
+          reason: 'resetPassword.user_not_found',
         });
       }
 
@@ -813,7 +813,7 @@ export class AuthService {
       if (!authHeader) {
         throw new UnauthorizedException({
           message: 'No authorization header',
-          reason: 'no_authorization_header',
+          reason: 'logout.no_authorization_header',
         });
       }
 
@@ -940,14 +940,14 @@ export class AuthService {
                   logoPath: true,
                   status: true,
                   isActive: true,
-                  configs: {
-                    select: {
-                      id: true,
-                      configKey: true,
-                      configValue: true,
-                      configType: true,
-                    },
-                  },
+                  // configs: {
+                  //   select: {
+                  //     id: true,
+                  //     configKey: true,
+                  //     configValue: true,
+                  //     configType: true,
+                  //   },
+                  // },
                   // services: {
                   //   select: {
                   //     serviceKey: true,
@@ -972,7 +972,7 @@ export class AuthService {
       if (!user) {
         throw new UnauthorizedException({
           message: 'User not found',
-          reason: 'user_not_found',
+          reason: 'getMe.user_not_found',
         });
       }
 
@@ -1195,14 +1195,14 @@ export class AuthService {
     if (!user) {
       throw new BadRequestException({
         message: 'Email not found',
-        reason: 'email_not_found',
+        reason: 'sendEmailVerification.email_not_found',
       });
     }
 
     if (user.emailVerifiedAt) {
       throw new BadRequestException({
         message: 'Email already verified',
-        reason: 'email_already_verified',
+        reason: 'sendEmailVerification.email_already_verified',
       });
     }
 
@@ -1262,14 +1262,14 @@ export class AuthService {
     if (!verificationToken) {
       throw new BadRequestException({
         message: 'Invalid verification token',
-        reason: 'invalid_verification_token',
+        reason: 'verifyEmail.invalid_verification_token',
       });
     }
 
     if (verificationToken.token !== token) {
       throw new BadRequestException({
         message: 'Invalid verification token',
-        reason: 'invalid_verification_token',
+        reason: 'verifyEmail.invalid_verification_token',
       });
     }
 
@@ -1336,14 +1336,14 @@ export class AuthService {
     if (!tenantHasUser) {
       throw new BadRequestException({
         message: 'You do not have access to this tenant',
-        reason: 'tenant_access_denied',
+        reason: 'switchTenant.tenant_access_denied',
       });
     }
 
     if (!tenantHasUser.isActive) {
       throw new BadRequestException({
         message: 'Your access to this tenant is inactive',
-        reason: 'tenant_access_inactive',
+        reason: 'switchTenant.tenant_access_inactive',
       });
     }
 
@@ -1364,7 +1364,7 @@ export class AuthService {
     if (!tenant || !tenant.isActive || tenant.revokedAt) {
       throw new BadRequestException({
         message: 'This tenant is inactive or has been revoked',
-        reason: 'tenant_inactive_or_revoked',
+        reason: 'switchTenant.tenant_inactive_or_revoked',
       });
     }
 
@@ -1422,7 +1422,7 @@ export class AuthService {
     if (!currentUser?.lastTenantId) {
       throw new BadRequestException({
         message: 'No active tenant selected',
-        reason: 'no_active_tenant',
+        reason: 'toggleUserLocked.no_active_tenant',
       });
     }
 
@@ -1438,7 +1438,7 @@ export class AuthService {
     if (!currentUserTenant?.isOwner) {
       throw new UnauthorizedException({
         message: 'Only tenant owners can lock/unlock users',
-        reason: 'owner_permission_required',
+        reason: 'toggleUserLocked.owner_permission_required',
       });
     }
 
@@ -1451,7 +1451,7 @@ export class AuthService {
     if (!targetUser) {
       throw new BadRequestException({
         message: 'User not found',
-        reason: 'user_not_found',
+        reason: 'toggleUserLocked.user_not_found',
       });
     }
 
@@ -1559,14 +1559,14 @@ export class AuthService {
     if (!session) {
       throw new BadRequestException({
         message: 'Session not found or does not belong to you',
-        reason: 'session_not_found',
+        reason: 'revokeSession.session_not_found',
       });
     }
 
     if (session.revokedAt) {
       throw new BadRequestException({
         message: 'Session already revoked',
-        reason: 'session_already_revoked',
+        reason: 'revokeSession.session_already_revoked',
       });
     }
 

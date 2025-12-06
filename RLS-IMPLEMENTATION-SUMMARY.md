@@ -53,7 +53,7 @@ await tenantRlsService.executeWithoutTenantContext(async () => {
 
 ## 🧪 Test RLS
 
-Server telah running di: `http://127.0.0.1:8000/api/v1`
+Server telah running di: `http://127.0.0.1:8001/api/v1`
 
 ### Test Endpoints:
 

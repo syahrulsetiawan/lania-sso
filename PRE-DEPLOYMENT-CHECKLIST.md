@@ -399,7 +399,7 @@
 
 - ✅ .env file configured
 - ✅ DATABASE_URL environment variable set
-- ✅ PORT configured (8000)
+- ✅ PORT configured (8001)
 - ✅ JWT_SECRET configured
 
 ### Startup Sequence
@@ -413,7 +413,7 @@
 7. ✅ Setup exception filter
 8. ✅ Setup response interceptor
 9. ✅ Initialize Swagger documentation
-10. ✅ Start listening on port 8000
+10. ✅ Start listening on port 8001
 
 ---
 
@@ -508,13 +508,13 @@ npm run start:prod
 
 ```bash
 # Test health
-curl http://localhost:8000/api/v1/health
+curl http://localhost:8001/api/v1/health
 
 # Check Swagger docs
-http://localhost:8000/api/v1/docs
+http://localhost:8001/api/v1/docs
 
 # Test login
-curl -X POST http://localhost:8000/api/v1/auth/login \
+curl -X POST http://localhost:8001/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"usernameOrEmail":"superadmin","password":"password"}'
 ```

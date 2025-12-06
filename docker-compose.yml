@@ -29,16 +29,24 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-https://sso-lania.muhammad-syamsurrijal.my.id}
       TZ: Asia/Jakarta
     ports:
-      - "10.29.29.29:8000:3000"
+      - '10.29.29.29:8001:3000'
     volumes:
       - ./logs:/app/logs
     # Use host network mode on Linux, or remove networks to access host services
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     networks:
       - lania-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1"]
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://localhost:3000/api/v1',
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

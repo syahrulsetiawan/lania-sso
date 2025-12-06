@@ -62,7 +62,7 @@ git --version
 
 ### Network Requirements
 
-- Port 8000 available (Backend API)
+- Port 8001 available (Backend API)
 - Port 5432 available (PostgreSQL)
 - Outbound SMTP access (for email notifications)
 
@@ -112,7 +112,7 @@ code .env
 
 # Essential variables to update:
 # NODE_ENV=development
-# PORT=8000
+# PORT=8001
 # JWT_SECRET=your-super-secret-key-minimum-32-chars
 # DATABASE_URL=mysql://root:password@localhost:3306/lania_sso
 ```
@@ -186,20 +186,20 @@ npm run start:dev
 # [Nest] 12345  - 11/13/2025, 10:30:02 AM     LOG [InstanceLoader] AuthModule dependencies initialized
 # [Nest] 12345  - 11/13/2025, 10:30:03 AM     LOG [InstanceLoader] TenantsModule dependencies initialized
 # [Nest] 12345  - 11/13/2025, 10:30:03 AM     LOG [NestApplication] Fastify server registered
-# [Nest] 12345  - 11/13/2025, 10:30:04 AM     LOG [NestApplication] Listening on 0.0.0.0:8000 🚀
+# [Nest] 12345  - 11/13/2025, 10:30:04 AM     LOG [NestApplication] Listening on 0.0.0.0:8001 🚀
 ```
 
 ### Step 8: Verify Development Setup
 
 ```bash
 # Test API health endpoint
-curl http://localhost:8000/api/v1/health
+curl http://localhost:8001/api/v1/health
 
 # Expected response:
 # {"status":"ok","timestamp":"2025-11-13T10:30:00Z"}
 
 # Access Swagger documentation
-# http://localhost:8000/api/v1/docs
+# http://localhost:8001/api/v1/docs
 ```
 
 ---
@@ -240,7 +240,7 @@ npm list @nestjs/core
 # Create .env file with staging values
 cat > .env << EOF
 NODE_ENV=staging
-PORT=8000
+PORT=8001
 HOST=0.0.0.0
 API_PREFIX=api/v1
 
@@ -328,7 +328,7 @@ module.exports = {
       exec_mode: 'cluster',
       env: {
         NODE_ENV: 'staging',
-        PORT: 8000,
+        PORT: 8001,
       },
       error_file: 'logs/err.log',
       out_file: 'logs/out.log',
@@ -394,7 +394,7 @@ server {
 
     # Proxy settings
     location / {
-        proxy_pass http://localhost:8000;
+        proxy_pass http://localhost:8001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -525,7 +525,7 @@ npm audit fix
 # Create secure .env file
 cat > .env << 'EOF'
 NODE_ENV=production
-PORT=8000
+PORT=8001
 HOST=0.0.0.0
 API_PREFIX=api/v1
 
@@ -626,7 +626,7 @@ module.exports = {
       exec_mode: 'cluster',
       env: {
         NODE_ENV: 'production',
-        PORT: 8000,
+        PORT: 8001,
       },
       error_file: 'logs/error.log',
       out_file: 'logs/output.log',
@@ -709,7 +709,7 @@ server {
 
     # Proxy configuration
     location / {
-        proxy_pass http://localhost:8000;
+        proxy_pass http://localhost:8001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -955,7 +955,7 @@ npm install
 npm run start:dev
 
 # Expected output:
-# [Nest] 12345 - 11/13/2025 LOG [NestApplication] Listening on 0.0.0.0:8000
+# [Nest] 12345 - 11/13/2025 LOG [NestApplication] Listening on 0.0.0.0:8001
 ```
 
 ### Production Startup with PM2
@@ -982,7 +982,7 @@ docker build -t laniakea-sso:latest .
 # Run container
 docker run -d \
   --name lania-sso \
-  -p 8000:8000 \
+  -p 8001:8001 \
   -e DATABASE_URL="mysql://user:pass@mysql:3306/lania_sso" \
   -e JWT_SECRET="your-secret-key" \
   laniakea-sso:latest
@@ -999,7 +999,7 @@ docker logs -f lania-sso
 
 ```bash
 # Health endpoint
-curl http://localhost:8000/api/v1/health
+curl http://localhost:8001/api/v1/health
 
 # Expected response:
 # {"status":"ok","timestamp":"2025-11-13T10:30:00Z"}
@@ -1009,7 +1009,7 @@ curl http://localhost:8000/api/v1/health
 
 ```bash
 # Login with demo user
-curl -X POST http://localhost:8000/api/v1/auth/login \
+curl -X POST http://localhost:8001/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "usernameOrEmail": "superadmin",
@@ -1030,7 +1030,7 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 
 ```bash
 # Replace TOKEN with actual token from login
-curl -X GET http://localhost:8000/api/v1/auth/me \
+curl -X GET http://localhost:8001/api/v1/auth/me \
   -H "Authorization: Bearer TOKEN"
 
 # Expected response includes:
@@ -1096,7 +1096,7 @@ psql -U lania_user -d lania_sso -c "SELECT extname, extversion FROM pg_extension
 
 ```bash
 # Check API health every 5 minutes
-curl -s http://localhost:8000/api/v1/health | jq .
+curl -s http://localhost:8001/api/v1/health | jq .
 
 # Check database connectivity
 psql -U lania_user -d lania_sso -c "SELECT NOW();"
