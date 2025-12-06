@@ -207,22 +207,22 @@ export class UserMeResponseDto {
       logoPath: string | null;
       status: string;
       isActive: boolean;
-      configs: Array<{
-        id: string;
-        configKey: string;
-        configValue: string;
-        configType: string;
-      }>;
-      services: Array<{
-        serviceKey: string;
-        service: {
-          key: string;
-          name: string;
-          description: string | null;
-          icon: string | null;
-          isActive: boolean;
-        };
-      }>;
+      // configs: Array<{
+      //   id: string;
+      //   configKey: string;
+      //   configValue: string;
+      //   configType: string;
+      // }>;
+      // services: Array<{
+      //   serviceKey: string;
+      //   service: {
+      //     key: string;
+      //     name: string;
+      //     description: string | null;
+      //     icon: string | null;
+      //     isActive: boolean;
+      //   };
+      // }>;
     };
   }>;
 }

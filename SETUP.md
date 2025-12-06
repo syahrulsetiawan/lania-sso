@@ -443,7 +443,7 @@ Copy-Item .env.example .env
 npm run start:dev
 
 # 6. Test login endpoint
-curl -X POST http://localhost:8000/api/v1/auth/login -H "Content-Type: application/json" -d '{\"usernameOrEmail\":\"superadmin\",\"password\":\"password\",\"deviceName\":\"Test Device\"}'
+curl -X POST http://localhost:8001/api/v1/auth/login -H "Content-Type: application/json" -d '{\"usernameOrEmail\":\"superadmin\",\"password\":\"password\",\"deviceName\":\"Test Device\"}'
 ```
 
 ---
